@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>핸즈프리 PT</title>
+  <meta name="description" content="폰을 세워두고 운동만 하세요. 전면 카메라가 운동 종류를 알아보고, 횟수를 세고, 자세를 교정하고, 기록을 정리합니다.">
+  <meta name="theme-color" content="#0e1116">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="핸즈프리PT">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="./css/app.css">
+</head>
+<body>
+  <!-- 홈 -->
+  <section id="screen-home" class="screen page" data-tab="home">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span>핸즈프리 PT</div>
+    </header>
+    <p class="today-label" id="today-label"></p>
+    <div class="card today-card" id="today-card"></div>
+    <button class="btn btn-primary btn-xl" id="btn-start-auto">
+      <span class="btn-title">운동 시작</span>
+      <span class="btn-sub">운동 종류를 자동으로 알아봐요</span>
+    </button>
+    <button class="btn btn-secondary btn-lg" id="btn-start-pick">
+      <span class="btn-title">운동 골라서 시작</span>
+      <span class="btn-sub">헬스장 루틴 · 무게 기록</span>
+    </button>
+    <div class="howto card">
+      <div class="howto-title">이렇게 쓰세요</div>
+      <ol>
+        <li>폰을 바닥·선반에 세우고 <b>2~3m 뒤로</b> 가서 전신이 나오게</li>
+        <li>운동을 시작하면 <b>“스쿼트, 둘”</b>처럼 알아서 세요</li>
+        <li>멈추면 세트가 끝나고 <b>휴식 타이머</b>가 돌아요</li>
+      </ol>
+      <p class="muted small">무음 모드를 끄고 소리를 켜 두세요. 영상은 폰 밖으로 나가지 않아요.</p>
+    </div>
+    <h2 class="section-title">최근 운동</h2>
+    <div id="recent-list" class="session-list"></div>
+  </section>
+
+  <!-- 운동 고르기 -->
+  <section id="screen-pick" class="screen page" hidden>
+    <header class="topbar">
+      <button class="icon-btn" data-back aria-label="뒤로">‹</button>
+      <div class="topbar-title">오늘 할 운동</div>
+      <span></span>
+    </header>
+    <p class="muted">고른 운동 안에서만 자동으로 알아봐요. 하나만 고르면 1회째부터 셉니다.</p>
+    <div id="pick-groups"></div>
+    <div class="sticky-bottom">
+      <button class="btn btn-primary btn-lg" id="btn-start-picked" disabled>운동을 골라 주세요</button>
+    </div>
+  </section>
+
+  <!-- 운동 중 -->
+  <section id="screen-workout" class="screen workout" hidden>
+    <video id="cam" playsinline muted autoplay></video>
+    <canvas id="skeleton"></canvas>
+    <div class="wo-top">
+      <div class="wo-status"><span class="dot" id="wo-dot"></span><span id="wo-status-text">준비 중</span></div>
+      <div class="wo-clock" id="wo-clock">0:00</div>
+      <div class="wo-actions">
+        <button class="wo-btn" id="btn-voice" aria-label="음성 끄기/켜기">🔊</button>
+        <button class="wo-btn wo-end" id="btn-end">종료</button>
+      </div>
+    </div>
+    <div class="wo-center">
+      <div class="wo-exercise" id="wo-exercise"></div>
+      <div class="wo-count" id="wo-count"></div>
+      <div class="wo-message" id="wo-message"></div>
+      <div class="wo-cue" id="wo-cue" hidden></div>
+    </div>
+    <div class="wo-bottom">
+      <div class="wo-sets" id="wo-sets"></div>
+    </div>
+    <div class="wo-debug" id="wo-debug" hidden></div>
+    <div class="wo-loading" id="wo-loading">
+      <div class="spinner"></div>
+      <div id="wo-loading-text">AI 자세 인식 준비 중…</div>
+    </div>
+  </section>
+
+  <!-- 운동 요약 / 세션 상세 -->
+  <section id="screen-summary" class="screen page" hidden>
+    <header class="topbar">
+      <button class="icon-btn" data-back aria-label="닫기">‹</button>
+      <div class="topbar-title" id="summary-title">운동 완료</div>
+      <button class="icon-btn danger" id="btn-delete-session" aria-label="이 운동 기록 삭제">🗑</button>
+    </header>
+    <div id="summary-body"></div>
+    <div class="sticky-bottom">
+      <button class="btn btn-primary btn-lg" id="btn-summary-done">저장하고 닫기</button>
+    </div>
+  </section>
+
+  <!-- 기록 -->
+  <section id="screen-history" class="screen page" data-tab="history" hidden>
+    <header class="topbar"><div class="topbar-title left">기록</div></header>
+    <div id="history-body"></div>
+  </section>
+
+  <!-- 설정 -->
+  <section id="screen-settings" class="screen page" data-tab="settings" hidden>
+    <header class="topbar"><div class="topbar-title left">설정</div></header>
+    <div id="settings-body"></div>
+  </section>
+
+  <nav class="tabbar" id="tabbar">
+    <button data-go="home" class="active"><span class="tab-ico">⌂</span>홈</button>
+    <button data-go="history"><span class="tab-ico">▦</span>기록</button>
+    <button data-go="settings"><span class="tab-ico">⚙</span>설정</button>
+  </nav>
+
+  <div class="toast" id="toast" hidden></div>
+  <dialog id="dialog"></dialog>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>

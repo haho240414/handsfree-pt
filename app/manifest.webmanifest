@@ -1,0 +1,16 @@
+{
+  "name": "핸즈프리 PT",
+  "short_name": "핸즈프리PT",
+  "description": "폰을 세워두고 운동만 하세요. 카메라가 운동을 알아보고, 세고, 자세를 교정하고, 기록합니다.",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0e1116",
+  "theme_color": "#0e1116",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

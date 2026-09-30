@@ -1,0 +1,255 @@
+{
+ "_설명": "정답표. 영상 장면 시트(초당 2~3장)를 직접 보고 센 횟수. conf: high(확실)/mid(±1 가능)/robust(편집·다인원 영상이라 횟수 대신 오인식만 확인). split: dev(규칙을 맞출 때 본 영상) / holdout(규칙을 맞출 때 안 본 영상 → 처음 보는 영상에서의 실력)",
+ "squat_front_nicke": {
+  "exercise": "squat",
+  "reps": 3,
+  "conf": "high",
+  "view": "정면",
+  "split": "dev"
+ },
+ "squat_side_nicke": {
+  "exercise": "squat",
+  "reps": 3,
+  "conf": "high",
+  "view": "측면",
+  "split": "dev"
+ },
+ "squat_mensgarage": {
+  "exercise": "squat",
+  "reps": 6,
+  "conf": "mid",
+  "view": "정면·바벨·헬스장",
+  "split": "dev"
+ },
+ "lunge_alt_demo": {
+  "exercise": "lunge",
+  "reps": 4,
+  "conf": "mid",
+  "view": "측면·번갈아",
+  "split": "dev"
+ },
+ "lunge_strengthlog": {
+  "exercise": "lunge",
+  "reps": 5,
+  "conf": "mid",
+  "view": "대각선·번갈아",
+  "split": "dev"
+ },
+ "lunge_front": {
+  "exercise": "lunge",
+  "reps": 10,
+  "conf": "mid",
+  "view": "정면·원거리",
+  "split": "dev"
+ },
+ "lateral_nasm": {
+  "exercise": "lateral",
+  "reps": 4,
+  "conf": "high",
+  "view": "정면",
+  "split": "dev"
+ },
+ "curl_mccarthy": {
+  "exercise": "curl",
+  "reps": 4,
+  "conf": "mid",
+  "view": "정면·걸어오는 구간 포함",
+  "split": "dev"
+ },
+ "press_livelean": {
+  "exercise": "press",
+  "reps": 8,
+  "conf": "mid",
+  "view": "정면·중간에 덤벨 들기·한팔 교대",
+  "split": "dev"
+ },
+ "situp_clinical": {
+  "exercise": "situp",
+  "reps": null,
+  "conf": "robust",
+  "view": "대각선·크런치",
+  "split": "dev"
+ },
+ "squat_xhit": {
+  "exercise": "squat",
+  "reps": null,
+  "conf": "robust",
+  "view": "편집(컷 전환·클로즈업)",
+  "split": "dev"
+ },
+ "jacks_xhit": {
+  "exercise": "jumpingjack",
+  "reps": null,
+  "conf": "robust",
+  "view": "편집(클로즈업)",
+  "split": "dev"
+ },
+ "curl_nuffield": {
+  "exercise": "curl",
+  "reps": null,
+  "conf": "robust",
+  "view": "편집·두 사람",
+  "split": "dev"
+ },
+ "situp_nuffield": {
+  "exercise": "situp",
+  "reps": null,
+  "conf": "robust",
+  "view": "편집·두 사람",
+  "split": "dev"
+ },
+ "bridge_puregym": {
+  "exercise": "bridge",
+  "reps": null,
+  "conf": "robust",
+  "view": "편집(클로즈업)",
+  "split": "dev"
+ },
+ "bridge_redefined": {
+  "exercise": "bridge",
+  "reps": null,
+  "conf": "robust",
+  "view": "두 사람",
+  "split": "dev"
+ },
+ "pushup_nasm": {
+  "exercise": "pushup",
+  "reps": 4,
+  "conf": "high",
+  "view": "대각선·컷 전환",
+  "split": "holdout"
+ },
+ "pushup_isolated_side": {
+  "exercise": "pushup",
+  "reps": 5,
+  "conf": "mid",
+  "view": "측면·애니메이션",
+  "split": "holdout"
+ },
+ "goblet_opex": {
+  "exercise": "squat",
+  "reps": 3,
+  "conf": "high",
+  "view": "대각선·고블릿",
+  "split": "holdout"
+ },
+ "goblet_puregym": {
+  "exercise": "squat",
+  "reps": null,
+  "conf": "robust",
+  "view": "정면→클로즈업 편집",
+  "split": "holdout"
+ },
+ "deadlift_glossop_side": {
+  "exercise": "deadlift",
+  "reps": 3,
+  "conf": "high",
+  "view": "측면·바닥에서 시작",
+  "split": "dev"
+ },
+ "rdl_brucker": {
+  "exercise": "deadlift",
+  "reps": 4,
+  "conf": "mid",
+  "view": "측면·루마니안·컷 전환",
+  "split": "dev"
+ },
+ "frontraise_puregym": {
+  "exercise": "frontraise",
+  "reps": 7,
+  "conf": "mid",
+  "view": "정면·한팔/양팔",
+  "split": "dev"
+ },
+ "frontraise_fbb": {
+  "exercise": "frontraise",
+  "reps": 4,
+  "conf": "mid",
+  "view": "정면·한팔 교대",
+  "split": "dev"
+ },
+ "latpulldown_puregym": {
+  "exercise": "latpulldown",
+  "reps": 3,
+  "conf": "mid",
+  "view": "뒤 대각선·헬스장",
+  "split": "dev"
+ },
+ "pullup_crossfit": {
+  "exercise": "pullup",
+  "reps": null,
+  "conf": "robust",
+  "view": "정면↔측면 편집",
+  "split": "dev"
+ },
+ "triext_opex": {
+  "exercise": "triext",
+  "reps": 3,
+  "conf": "mid",
+  "view": "측면",
+  "split": "dev"
+ },
+ "triext_fbb": {
+  "exercise": "triext",
+  "reps": null,
+  "conf": "robust",
+  "view": "정면·덤벨에 팔 가림",
+  "split": "dev"
+ },
+ "hipthrust_rusin": {
+  "exercise": "bridge",
+  "reps": 4,
+  "conf": "mid",
+  "view": "대각선·바벨 힙쓰러스트",
+  "split": "dev"
+ },
+ "legraise_livestrong": {
+  "exercise": "legraise",
+  "reps": 7,
+  "conf": "mid",
+  "view": "대각선→측면",
+  "split": "dev"
+ },
+ "burpee_crossfit": {
+  "exercise": "burpee",
+  "reps": 3,
+  "conf": "high",
+  "view": "측면·느린 시범",
+  "split": "dev"
+ },
+ "climber_grouphiit": {
+  "exercise": "climber",
+  "reps": null,
+  "conf": "robust",
+  "view": "측면·빠름",
+  "split": "dev"
+ },
+ "calf_balance": {
+  "exercise": "calf",
+  "reps": 3,
+  "conf": "mid",
+  "view": "측면",
+  "split": "dev"
+ },
+ "calf_opex": {
+  "exercise": "calf",
+  "reps": null,
+  "conf": "robust",
+  "view": "뒷모습·벽 짚음",
+  "split": "dev"
+ },
+ "kbswing_strongfirst": {
+  "exercise": "kbswing",
+  "reps": null,
+  "conf": "robust",
+  "view": "두 사람·편집",
+  "split": "dev"
+ },
+ "dips_floor_tasha": {
+  "exercise": "dips",
+  "reps": null,
+  "conf": "robust",
+  "view": "1회뿐인 짧은 영상",
+  "split": "dev"
+ }
+}

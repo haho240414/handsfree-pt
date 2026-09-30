@@ -1,0 +1,86 @@
+// 음성 안내: 횟수는 '하나, 둘, 셋'(고유어)으로, 빠른 반복은 삐 소리로 대신한다.
+
+const ONES = ['', '하나', '둘', '셋', '넷', '다섯', '여섯', '일곱', '여덟', '아홉'];
+const TENS = ['', '열', '스물', '서른', '마흔', '쉰', '예순', '일흔', '여든', '아흔'];
+
+/** 1~99 → 고유어 (하나, 둘 … 아흔아홉). 그 밖은 숫자 그대로 */
+export function nativeKorean(n) {
+  if (!Number.isInteger(n) || n <= 0 || n >= 100) return String(n);
+  return TENS[Math.floor(n / 10)] + ONES[n % 10];
+}
+
+export class Voice {
+  constructor() {
+    this.enabled = true;
+    this.style = 'native';
+    this.ctx = null;
+    this.ko = null;
+    this.lastCountAt = 0;
+    this.speakingCount = false;
+    if ('speechSynthesis' in window) {
+      const pick = () => {
+        const vs = speechSynthesis.getVoices();
+        this.ko = vs.find((v) => v.lang === 'ko-KR' && /yuna|유나|google/i.test(v.name))
+          || vs.find((v) => v.lang?.startsWith('ko')) || null;
+      };
+      pick();
+      speechSynthesis.addEventListener?.('voiceschanged', pick);
+    }
+  }
+
+  /** 반드시 사용자 탭 안에서 호출 (iOS 소리 잠금 해제) */
+  unlock() {
+    try {
+      this.ctx ||= new (window.AudioContext || window.webkitAudioContext)();
+      this.ctx.resume?.();
+    } catch { /* 소리 없이 진행 */ }
+    if ('speechSynthesis' in window) {
+      const u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0;
+      speechSynthesis.speak(u);
+    }
+  }
+
+  say(text, { interrupt = false } = {}) {
+    if (!this.enabled || !text || !('speechSynthesis' in window)) return;
+    if (interrupt) speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ko-KR';
+    if (this.ko) u.voice = this.ko;
+    u.rate = 1.08;
+    u.pitch = 1.0;
+    speechSynthesis.speak(u);
+  }
+
+  /** 횟수 읽기. 반복이 빠르면(0.8초 이내) 말 대신 삐 소리, 5의 배수만 말한다 */
+  count(n, extra = '') {
+    const now = performance.now();
+    const fast = now - this.lastCountAt < 800;
+    this.lastCountAt = now;
+    const word = this.style === 'native' ? nativeKorean(n) : String(n);
+    if (fast && !extra && n % 5 !== 0) {
+      this.beep(880, 0.07);
+      return;
+    }
+    this.say(extra ? `${word}. ${extra}` : word, { interrupt: true });
+  }
+
+  beep(freq = 880, dur = 0.08, gain = 0.25) {
+    if (!this.enabled || !this.ctx) return;
+    try {
+      const t = this.ctx.currentTime;
+      const o = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(gain, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g).connect(this.ctx.destination);
+      o.start(t);
+      o.stop(t + dur + 0.02);
+    } catch { /* 무시 */ }
+  }
+
+  stop() {
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+  }
+}

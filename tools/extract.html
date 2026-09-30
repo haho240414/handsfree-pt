@@ -1,0 +1,48 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>pose extract</title>
+<script type="module">
+  // 테스트 영상 → 프레임별 랜드마크(앱과 같은 MediaPipe 모델·코드). tools/extract.mjs 가 헤드리스 크롬에서 호출한다.
+  import { PoseLandmarker, FilesetResolver } from '/vendor/mediapipe/vision_bundle.mjs';
+
+  const fileset = await FilesetResolver.forVisionTasks('/vendor/mediapipe/wasm');
+  const r4 = (x) => Math.round(x * 1e4) / 1e4;
+  const pack = (arr) => arr.map((p) => [r4(p.x), r4(p.y), r4(p.z), r4(p.visibility ?? 0)]);
+
+  window.extract = async (url, fps, model, maxSec = Infinity) => {
+    const lmk = await PoseLandmarker.createFromOptions(fileset, {
+      baseOptions: { modelAssetPath: `/vendor/mediapipe/models/pose_landmarker_${model}.task`, delegate: 'CPU' },
+      runningMode: 'VIDEO',
+      numPoses: 1,
+    });
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.src = url;
+    await new Promise((res, rej) => {
+      video.addEventListener('loadeddata', res, { once: true });
+      video.addEventListener('error', () => rej(new Error('video load failed: ' + url)), { once: true });
+    });
+    const frames = [];
+    const t0 = performance.now();
+    const end = Math.min(video.duration, maxSec);
+    for (let i = 0; ; i++) {
+      const t = i / fps;
+      if (t > end - 0.02) break;
+      await new Promise((res) => {
+        video.addEventListener('seeked', res, { once: true });
+        video.currentTime = t;
+      });
+      const r = lmk.detectForVideo(video, Math.round(t * 1000) + 1);
+      const tt = Math.round(t * 1000) / 1000;
+      frames.push(r.landmarks?.[0] ? { t: tt, lm: pack(r.landmarks[0]), wl: pack(r.worldLandmarks[0]) } : { t: tt });
+    }
+    lmk.close();
+    return {
+      url, fps, model, duration: video.duration, width: video.videoWidth, height: video.videoHeight,
+      ms: Math.round(performance.now() - t0), frames,
+    };
+  };
+  window.ready = true;
+</script>

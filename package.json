@@ -1,0 +1,18 @@
+{
+  "name": "handsfree-workout",
+  "version": "1.0.0",
+  "description": "핸즈프리 PT — 전면카메라로 운동을 자동 인식·카운트·기록하는 웹앱(PWA)",
+  "scripts": {
+    "test": "node --test test/unit/*.test.mjs",
+    "serve": "node tools/serve.mjs",
+    "extract": "node tools/extract.mjs",
+    "eval": "node test/eval.mjs"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "@mediapipe/tasks-vision": "^1.0.1",
+    "puppeteer-core": "^25.12.0"
+  },
+  "type": "module",
+  "private": true
+}

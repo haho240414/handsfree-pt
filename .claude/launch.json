@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "handsfree-pt",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-lc",
+        "cd '/Users/yunhojun/Documents/handsfree-workout' && exec node tools/serve.mjs --port 8860"
+      ],
+      "port": 8860
+    }
+  ]
+}
