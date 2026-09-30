@@ -78,11 +78,13 @@ export class Workout {
 
     try {
       await this._openSource(source);
-      landmarkers[st.model] ||= await createPoseLandmarker({
+      const key = `${st.model}-${st.gpu ? 'auto' : 'CPU'}`;
+      landmarkers[key] ||= await createPoseLandmarker({
         model: st.model,
+        delegate: st.gpu ? 'auto' : 'CPU',
         onStatus: (s) => { this.el.loadingText.textContent = s; },
       });
-      this.landmarker = landmarkers[st.model];
+      this.landmarker = landmarkers[key];
     } catch (e) {
       console.error(e);
       if (this.session) this._fail(e);

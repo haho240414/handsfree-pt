@@ -3,7 +3,8 @@
 let visionMod = null;
 let fileset = null;
 
-export async function createPoseLandmarker({ model = 'full', onStatus = () => {} } = {}) {
+/** delegate: 'auto' = GPU 먼저, 안 되면 CPU / 'CPU' = 호환 모드(일부 폰·에뮬레이터의 GPU 문제 회피) */
+export async function createPoseLandmarker({ model = 'full', delegate = 'auto', onStatus = () => {} } = {}) {
   onStatus('AI 엔진 불러오는 중…');
   visionMod ||= await import('../vendor/mediapipe/vision_bundle.js');
   const { PoseLandmarker, FilesetResolver } = visionMod;
@@ -18,6 +19,11 @@ export async function createPoseLandmarker({ model = 'full', onStatus = () => {}
     minTrackingConfidence: 0.5,
   });
   onStatus(model === 'full' ? '자세 인식 모델(정확) 불러오는 중…' : '자세 인식 모델(빠름) 불러오는 중…');
+  if (delegate === 'CPU') {
+    const lm = await PoseLandmarker.createFromOptions(fileset, options('CPU'));
+    lm.delegate = 'CPU';
+    return lm;
+  }
   try {
     const lm = await PoseLandmarker.createFromOptions(fileset, options('GPU'));
     lm.delegate = 'GPU';

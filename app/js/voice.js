@@ -48,8 +48,12 @@ export class Voice {
   async koreanAvailable() {
     if (!NativeTTS) return 'speechSynthesis' in window;
     try {
-      const { supported } = await NativeTTS.isLanguageSupported({ lang: 'ko-KR' });
-      return supported;
+      // 음성 엔진이 없거나 준비 안 된 폰에선 응답이 안 올 수 있어 3초 제한
+      const res = await Promise.race([
+        NativeTTS.isLanguageSupported({ lang: 'ko-KR' }),
+        new Promise((resolve) => setTimeout(() => resolve({ supported: false, timeout: true }), 3000)),
+      ]);
+      return !!res.supported;
     } catch {
       return false;
     }

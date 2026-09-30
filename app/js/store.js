@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS = {
   cues: true,           // 자세 교정 음성
   rest: 60,             // 휴식 타이머(초), 0 = 끔
   model: 'full',        // full(정확) | lite(빠름)
+  gpu: true,            // GPU 가속 (끄면 CPU 호환 모드)
   lockReps: 2,          // 자동 인식 확정에 필요한 반복 수
   mirror: true,         // 화면 좌우 반전(거울처럼)
   debug: false,         // 인식 과정 보기
