@@ -3,3 +3,5 @@ test/videos/
 test/videos2/
 test/videos_web/
 .DS_Store
+android-signing/
+dist/

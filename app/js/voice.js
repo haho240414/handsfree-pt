@@ -1,4 +1,7 @@
 // 음성 안내: 횟수는 '하나, 둘, 셋'(고유어)으로, 빠른 반복은 삐 소리로 대신한다.
+// 안드로이드 앱에선 WebView 가 웹 음성을 지원하지 않아 폰의 기본 TTS(네이티브)로 말한다.
+
+import { NativeTTS } from './native.js';
 
 const ONES = ['', '하나', '둘', '셋', '넷', '다섯', '여섯', '일곱', '여덟', '아홉'];
 const TENS = ['', '열', '스물', '서른', '마흔', '쉰', '예순', '일흔', '여든', '아흔'];
@@ -34,15 +37,33 @@ export class Voice {
       this.ctx ||= new (window.AudioContext || window.webkitAudioContext)();
       this.ctx.resume?.();
     } catch { /* 소리 없이 진행 */ }
-    if ('speechSynthesis' in window) {
+    if (!NativeTTS && 'speechSynthesis' in window) {
       const u = new SpeechSynthesisUtterance(' ');
       u.volume = 0;
       speechSynthesis.speak(u);
     }
   }
 
+  /** 안드로이드: 폰 TTS 에 한국어 음성이 있는지 (없으면 설정에서 설치 안내) */
+  async koreanAvailable() {
+    if (!NativeTTS) return 'speechSynthesis' in window;
+    try {
+      const { supported } = await NativeTTS.isLanguageSupported({ lang: 'ko-KR' });
+      return supported;
+    } catch {
+      return false;
+    }
+  }
+
   say(text, { interrupt = false } = {}) {
-    if (!this.enabled || !text || !('speechSynthesis' in window)) return;
+    if (!this.enabled || !text) return;
+    if (NativeTTS) {
+      // Flush(0) = 말하던 것을 끊고 바로, Add(1) = 앞 말이 끝난 뒤
+      NativeTTS.speak({ text, lang: 'ko-KR', rate: 1.05, pitch: 1.0, volume: 1.0, queueStrategy: interrupt ? 0 : 1 })
+        .catch(() => {});
+      return;
+    }
+    if (!('speechSynthesis' in window)) return;
     if (interrupt) speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'ko-KR';
@@ -81,6 +102,7 @@ export class Voice {
   }
 
   stop() {
-    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    if (NativeTTS) NativeTTS.stop().catch(() => {});
+    else if ('speechSynthesis' in window) speechSynthesis.cancel();
   }
 }

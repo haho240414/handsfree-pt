@@ -5,7 +5,7 @@ let fileset = null;
 
 export async function createPoseLandmarker({ model = 'full', onStatus = () => {} } = {}) {
   onStatus('AI 엔진 불러오는 중…');
-  visionMod ||= await import('../vendor/mediapipe/vision_bundle.mjs');
+  visionMod ||= await import('../vendor/mediapipe/vision_bundle.js');
   const { PoseLandmarker, FilesetResolver } = visionMod;
   fileset ||= await FilesetResolver.forVisionTasks(new URL('../vendor/mediapipe/wasm', import.meta.url).href);
   const modelUrl = new URL(`../vendor/mediapipe/models/pose_landmarker_${model}.task`, import.meta.url).href;

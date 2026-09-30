@@ -11,11 +11,19 @@
 
 | 어디서 | 방법 |
 |---|---|
+| **안드로이드 폰 (앱)** | 폰에서 [handsfree-pt.apk 받기](https://github.com/haho240414/handsfree-pt/releases/latest/download/handsfree-pt.apk) → 설치(처음이면 "출처를 알 수 없는 앱 설치" 허용) → 첫 실행 때 카메라 허용 |
+| **아무 폰 브라우저** | https://haho240414.github.io/handsfree-pt/ 접속 → 공유/메뉴 → **홈 화면에 추가** |
 | **이 맥 (웹캠)** | `핸즈프리PT.command` 더블클릭 → 브라우저가 열림 → **운동 시작** → 노트북에서 2~3m 떨어져 운동 |
-| **폰** | 카메라는 https 주소에서만 켜진다 → `tools/deploy-pages.sh` 로 GitHub Pages 에 올린 뒤 폰 브라우저로 그 주소 접속 → 공유 버튼 → **홈 화면에 추가** |
 | **녹화한 영상** | 설정 → *녹화한 영상으로 분석* → 영상 파일 선택 (재생보다 빠르게 분석해 기록으로 저장) |
 
-폰을 바닥·선반에 세우고 전신이 나오게 2~3m 뒤로. 무음 모드를 끄면 "스쿼트, 하나, 둘…" 음성이 나온다.
+폰을 바닥·선반에 세우고 전신이 나오게 2~3m 뒤로. 소리를 켜면 "스쿼트, 하나, 둘…" 음성이 나온다(설정 → 소리 확인).
+
+### 안드로이드 앱은 어떻게 만들어지나
+
+- `app/` 웹앱을 [Capacitor](https://capacitorjs.com) 로 감싼 네이티브 앱(`android/`). AI 모델·엔진이 APK 안에 들어 있어 **오프라인에서도 동작**
+- WebView 가 못 하는 것만 네이티브로: 음성은 폰 기본 TTS(`@capacitor-community/text-to-speech`), 화면 꺼짐 방지(`MainActivity`), 뒤로가기(운동 중엔 안 꺼짐), 백업 파일은 공유 창
+- 빌드는 GitHub Actions(`.github/workflows/android.yml`): APK 빌드 → **안드로이드 에뮬레이터에 설치해 카메라로 운동 화면까지 자동 점검** → 통과하면 Releases 의 다운로드 링크 갱신. `main` 에 올리면 자동
+- 서명 키는 이 맥의 `android-signing/`(git 제외)과 GitHub 비밀값에만 있다. **잃어버리면 다음 버전을 기존 앱 위에 업데이트 못 함** → 따로 백업
 
 ## 기능
 

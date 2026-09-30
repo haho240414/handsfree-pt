@@ -3,7 +3,7 @@
 <title>pose extract</title>
 <script type="module">
   // 테스트 영상 → 프레임별 랜드마크(앱과 같은 MediaPipe 모델·코드). tools/extract.mjs 가 헤드리스 크롬에서 호출한다.
-  import { PoseLandmarker, FilesetResolver } from '/vendor/mediapipe/vision_bundle.mjs';
+  import { PoseLandmarker, FilesetResolver } from '/vendor/mediapipe/vision_bundle.js';
 
   const fileset = await FilesetResolver.forVisionTasks('/vendor/mediapipe/wasm');
   const r4 = (x) => Math.round(x * 1e4) / 1e4;

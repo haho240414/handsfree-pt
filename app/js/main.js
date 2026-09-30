@@ -5,6 +5,7 @@ import * as store from './store.js';
 import { Workout } from './workout.js';
 import { renderHistory } from './history.js';
 import { esc, exName, DAYS, fmtDate, fmtTime, minutes, setValue, sessionTotals, sessionLine, sessionItem } from './format.js';
+import { isNative, NativeApp, NativeTTS, canShareFile, shareTextFile } from './native.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -283,6 +284,7 @@ function renderSettings() {
   $('settings-body').innerHTML = `
     <div class="card">
       ${row('음성 안내', '횟수·세트·휴식을 소리로 알려줘요', sw('voice'))}
+      ${row('소리 확인', '운동 전에 한 번 들어보세요', '<button class="mini-btn" id="btn-voice-test" type="button">들어보기</button>')}
       ${row('숫자 읽기', '', seg('countStyle', [['native', '하나 둘 셋'], ['number', '일 이 삼']]))}
       ${row('자세 교정 음성', '같은 문제가 반복될 때만 짧게 말해요', sw('cues'))}
       ${row('휴식 타이머', '세트가 끝나면 자동으로 시작', seg('rest', [[0, '끔'], [30, '30초'], [60, '1분'], [90, '1분30'], [120, '2분']]), true)}
@@ -323,12 +325,29 @@ $('settings-body').addEventListener('click', async (e) => {
     return;
   }
   if (e.target.closest('#btn-export')) {
-    const blob = new Blob([store.exportJSON()], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `handsfree-pt-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    const name = `handsfree-pt-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    if (canShareFile) {
+      // 앱(WebView)에선 다운로드가 안 되므로 공유 창으로 저장 위치를 고르게 한다
+      shareTextFile(name, store.exportJSON()).catch((err) => { if (!/cancel/i.test(err?.message)) toast('내보내지 못했어요'); });
+    } else {
+      const blob = new Blob([store.exportJSON()], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }
+  }
+  if (e.target.closest('#btn-voice-test')) {
+    const v = workout.voice;
+    v.enabled = true;
+    v.style = store.settings().countStyle;
+    v.unlock();
+    v.say('하나, 둘, 셋. 소리가 잘 들리나요?', { interrupt: true });
+    if (isNative && !(await v.koreanAvailable())) {
+      toast('폰에 한국어 음성이 없어요. 음성 데이터 설치 화면을 엽니다', 4000);
+      NativeTTS?.openInstall?.().catch(() => {});
+    }
   }
   if (e.target.closest('#btn-wipe')) {
     if (await confirmDialog('모든 기록을 지울까요?', '설정은 남고 운동 기록만 지워져요. 되돌릴 수 없어요.', '모두 지우기')) {
@@ -372,6 +391,20 @@ const render = {
 applyTheme();
 go('home');
 
+// 검증용 접근점 (앱 자동 점검·개발 도구가 사용)
+window.__hfpt = { workout, store, isNative };
+
+// 안드로이드 뒤로가기: 대화상자 닫기 → 운동 중엔 무시(실수로 꺼지지 않게) → 이전 화면 → 홈 → 앱 내리기
+NativeApp?.addListener('backButton', () => {
+  const d = $('dialog');
+  if (d.open) { d.close('cancel'); return; }
+  if (!$('screen-workout').hidden) { toast('운동을 끝내려면 화면 위 ‘종료’를 눌러 주세요'); return; }
+  if (stack.length) { back(); return; }
+  const cur = [...document.querySelectorAll('.screen.page')].find((sc) => !sc.hidden)?.id;
+  if (cur && cur !== 'screen-home') { go('home'); return; }
+  NativeApp.minimizeApp();
+});
+
 // 개발·검증용: ?video=/test/videos/x.mp4 → 그 영상으로 분석 (카메라 대신)
 const params = new URLSearchParams(location.search);
 if (params.get('video')) {
@@ -382,9 +415,8 @@ if (params.get('video')) {
   btn.textContent = `영상으로 분석: ${params.get('video').split('/').pop()}`;
   btn.onclick = () => workout.start({ candidates: params.get('pick')?.split(',') || null, source: params.get('video') });
   $('btn-start-pick').after(btn);
-  window.__hfpt = { workout, store };
 }
 
-if ('serviceWorker' in navigator && location.protocol === 'https:') {
+if (!isNative && 'serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
