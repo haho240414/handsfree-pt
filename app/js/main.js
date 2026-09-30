@@ -2,7 +2,7 @@
 
 import { EXERCISES, EXERCISE_BY_ID, GROUPS, formInfo } from './engine/exercises.js';
 import * as store from './store.js';
-import { Workout } from './workout.js';
+import { Workout, GPU_GUARD } from './workout.js';
 import { renderHistory } from './history.js';
 import { esc, exName, DAYS, fmtDate, fmtTime, minutes, setValue, sessionTotals, sessionLine, sessionItem } from './format.js';
 import { isNative, NativeApp, NativeTTS, canShareFile, shareTextFile } from './native.js';
@@ -391,6 +391,15 @@ const render = {
 };
 applyTheme();
 go('home');
+
+// 지난 실행이 GPU 로 AI 를 켜다 멈췄다면 호환 모드로 전환
+try {
+  if (localStorage.getItem(GPU_GUARD) === 'starting') {
+    localStorage.removeItem(GPU_GUARD);
+    store.setSetting('gpu', false);
+    setTimeout(() => toast('지난번에 AI 가속 중 앱이 멈춰서 호환 모드로 바꿨어요 (설정 → GPU 가속)', 5000), 600);
+  }
+} catch { /* 저장소를 못 쓰면 건너뜀 */ }
 
 // 검증용 접근점 (앱 자동 점검·개발 도구가 사용)
 window.__hfpt = { workout, store, isNative };

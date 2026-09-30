@@ -16,6 +16,14 @@ const fmtClock = (sec) => {
 
 const landmarkers = {}; // 모델별로 한 번만 만든다
 
+// GPU 안전장치: GPU 로 AI 를 켜는 동안 앱이 통째로 멈추면(일부 폰·에뮬레이터 실측) 다음 실행 때 호환 모드로 바꾼다.
+// 켜기 직전 'starting' 을 적고, 60프레임을 무사히 처리하면 지운다. 앱을 스스로 내린 경우도 지운다.
+export const GPU_GUARD = 'hfpt.gpuGuard';
+const guard = (v) => {
+  try { if (v) localStorage.setItem(GPU_GUARD, v); else localStorage.removeItem(GPU_GUARD); } catch { /* 무시 */ }
+};
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') guard(null); });
+
 export class Workout {
   constructor({ onDone }) {
     this.onDone = onDone;
@@ -79,6 +87,7 @@ export class Workout {
     try {
       await this._openSource(source);
       const key = `${st.model}-${st.gpu ? 'auto' : 'CPU'}`;
+      if (st.gpu && !landmarkers[key]) guard('starting');
       landmarkers[key] ||= await createPoseLandmarker({
         model: st.model,
         delegate: st.gpu ? 'auto' : 'CPU',
@@ -133,6 +142,7 @@ export class Workout {
   }
 
   _fail(e) {
+    guard(null);
     const msg = {
       NotAllowedError: '카메라 권한이 필요해요. 브라우저 설정에서 이 사이트의 카메라를 허용해 주세요.',
       NotFoundError: '카메라를 찾을 수 없어요.',
@@ -206,6 +216,8 @@ export class Workout {
     const t = this.isFile ? mediaTime : (now - this.t0) / 1000;
     const events = this.tracker.update(t, lm, wl);
     this.frames++;
+    this.totalFrames = (this.totalFrames || 0) + 1;
+    if (this.totalFrames === 60) guard(null); // GPU 로 60프레임 무사히 처리 → 안전
     if (now - this.fpsT > 1000) {
       this.fps = Math.round(this.frames * 1000 / (now - this.fpsT));
       this.frames = 0;

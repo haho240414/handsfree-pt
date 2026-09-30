@@ -352,6 +352,8 @@ input[type="number"], input[type="text"], select {
   background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-weight: 600; font-size: 14px;
   max-width: calc(100vw - 32px); box-shadow: 0 6px 24px rgba(0,0,0,.25);
 }
+/* 운동 중엔 큰 숫자·안내와 겹치지 않게 위쪽에 */
+body.in-workout .toast { bottom: auto; top: calc(70px + var(--safe-t)); z-index: 70; }
 dialog {
   border: 0; border-radius: 18px; padding: 18px; width: min(92vw, 420px);
   background: var(--surface); color: var(--text); box-shadow: 0 20px 60px rgba(0,0,0,.35);
