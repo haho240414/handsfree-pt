@@ -56,7 +56,7 @@
 - **자세 교정**: 같은 문제가 최근 3회 중 2회 나오면 짧게 음성으로 ("여섯. 더 깊게"), 같은 말은 3회 안에 반복 안 함. 요약 화면에 운동별 피드백
 - **플랭크**: 자세가 2.5초 유지되면 시간 재기 시작, 10초마다 음성, 무너지면 종료
 - **기록**: 요약(세트·횟수·무게·자세), 달력, 이번 주 통계·연속 운동일, 운동별 8주 추이 그래프, 세트 수정·추가·삭제
-- **진단 기록**: 인식이 이상했으면 요약 화면에서 '진단 기록 저장·공유' → 그 운동에서 AI 가 본 관절 좌표(영상·사진 아님, 최근 20분, 20분 ≈ 4MB)를 파일로 내보낸다. 개발 쪽에서 `node tools/replay.mjs <파일>` 로 그대로 재현해 고친다. 자동 전송 없음
+- **진단 기록**: 인식이 이상했으면 요약 화면에서 '진단 기록 저장·공유' → 그 운동에서 AI 가 본 관절 좌표(영상·사진 아님, 최근 20분, 20분 ≈ 8MB)를 파일로 내보낸다. 개발 쪽에서 `node tools/replay.mjs <파일>` 로 그대로 재현해 고친다. 자동 전송 없음
 - 화면 꺼짐 방지(Wake Lock), 오프라인 동작(서비스 워커), 라이트/다크 테마
 
 ## 지원 운동 (23종)
@@ -143,6 +143,7 @@ tools/
   extract.mjs/.html       영상 → 관절 좌표(test/fixtures) — 헤드리스 크롬에서 앱과 같은 코드로
   features.mjs            fixture 의 특징값 시계열 보기 (규칙 조정용)
   replay.mjs              앱 진단 기록 재현: 앱 결과 vs 재현 결과, 운동별 후보 반복과 탈락 이유, --save 로 테스트에 추가
+  camera-sim.mjs          카메라 모드 전체 점검: 시범 영상을 가짜 카메라로 헤드리스 크롬(폰 화면)에 넣어 안내·카운트·템포·요약·진단 기록→재현까지
   make-icons.mjs          아이콘 생성
   deploy-pages.sh         app/ 만 GitHub Pages 로 배포
 test/
@@ -160,6 +161,7 @@ node test/eval.mjs --model full            # 실제 영상 채점
 node test/eval.mjs --debug curl_mccarthy   # 한 영상의 반복 후보·탈락 사유
 node test/robust.mjs                       # 폰 기울기·몸 잘림 등 실사용 조건 시뮬레이션
 node tools/replay.mjs ~/Downloads/handsfree-pt-diag-*.json.gz --why   # 사용자 진단 기록 재현
+node tools/camera-sim.mjs squat_mensgarage --shots /tmp/sim   # 카메라 모드 끝까지 (--tilt 20: 기울기 센서 흉내)
 node tools/features.mjs pushup_nasm elbow,torsoTilt,shoulderOverWrist
 VIDEO_DIR=test/videos2 node tools/extract.mjs --model full   # 새 영상 관절 좌표 뽑기
 ```

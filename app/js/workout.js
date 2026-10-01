@@ -397,7 +397,7 @@ export class Workout {
       this._setText('count', String(snap.pending.count));
       count.classList.remove('rest');
       count.classList.add('tentative');
-      this._setText('message', `${left === 1 ? '한' : left}번 더 하면 세기 시작해요`);
+      this._setText('message', `${left === 1 ? '한 번' : `${left}번`} 더 하면 세기 시작해요`);
     } else if (this.restUntil) {
       const left = Math.ceil((this.restUntil - now) / 1000);
       this._setText('exercise', '휴식');
