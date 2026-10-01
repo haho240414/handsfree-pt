@@ -145,3 +145,16 @@ test('후보 운동을 정하면 그 안에서만 인식한다', () => {
   const { sets } = runTracker(squatThenJacks(), { candidates: ['squat', 'pushup'] });
   assert.deepEqual(sets.map((s) => s.exercise), ['squat']);
 });
+
+import { computeFeatures, isHandsUp } from '../../app/js/engine/features.js';
+test('손 제스처: 두 손을 머리 위로 뻗으면 인식, 내리거나 한 손만이면 아님', () => {
+  const up = standingPose({ arms: 1 });
+  const down = standingPose({ arms: 0 });
+  const half = standingPose({ arms: 0.45 }); // 어깨 높이 정도
+  assert.equal(isHandsUp(computeFeatures(up.lm, up.wl)), true);
+  assert.equal(isHandsUp(computeFeatures(down.lm, down.wl)), false);
+  assert.equal(isHandsUp(computeFeatures(half.lm, half.wl)), false);
+  const one = standingPose({ arms: 1 });
+  one.lm[16] = { ...one.lm[16], visibility: 0.1 }; // 한 손이 안 보이면 아님
+  assert.equal(isHandsUp(computeFeatures(one.lm, one.wl)), false);
+});

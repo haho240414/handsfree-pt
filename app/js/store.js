@@ -88,7 +88,7 @@ export function setRoutineDraft(r) {
   state.routineDraft = r;
   persist();
 }
-export const routinePrefs = () => ({ focus: 'auto', equipment: 'body', minutes: 30, level: 1, ...(state.routinePrefs || {}) });
+export const routinePrefs = () => ({ focus: 'auto', equipment: 'body', minutes: 30, level: 1, warmup: true, ...(state.routinePrefs || {}) });
 export function setRoutinePrefs(p) {
   state.routinePrefs = { ...routinePrefs(), ...p };
   persist();

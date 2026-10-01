@@ -5,7 +5,8 @@
 //   --tilt N : 폰을 N°(+ = 뒤로 기대 올려다봄) 기울여 둔 것처럼 기울기 센서 값을 흘려 넣는다
 //   --set 키=값 : 설정을 바꿔서 실행 (여러 번 가능, 예: --set rest=15 --set setEndSec=3 --set restAlerts=10,5,3)
 //   --after N : 영상이 끝난 뒤 N초 더 지켜본다 (휴식 타이머·알림 확인용, 기본 4)
-//   --plan 'squat:3x2:rest=6,plank:20sx1' : 오늘의 루틴(PT 모드)으로 시작 — 운동:횟수x세트[:rest=초], 버티기는 '20s'
+//   --plan 'warmup:6s,squat:t8x1,squat:3x2:rest=6,plank:20sx1' : 오늘의 루틴(PT 모드)으로 시작
+//          운동:횟수x세트[:rest=초], 버티기는 '20s', 인터벌(시간 동안)은 't30', 준비운동/마무리는 'warmup:60s'
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -28,9 +29,11 @@ const plan = planArg && {
   name: '점검 루틴',
   items: planArg.split(',').map((tok) => {
     const [ex, rs, ...more] = tok.split(':');
+    if (ex === 'warmup' || ex === 'cooldown') return { timer: ex, name: ex === 'warmup' ? '준비운동' : '마무리 스트레칭', sec: Number(rs.replace('s', '')), sets: 1, rest: 0 };
     const [target, sets] = rs.split('x');
     const it = { exercise: ex, sets: Number(sets || 1), rest: 6 };
-    if (target.endsWith('s')) it.holdSec = Number(target.slice(0, -1)); else it.reps = Number(target);
+    if (target.startsWith('t')) it.workSec = Number(target.slice(1));
+    else if (target.endsWith('s')) it.holdSec = Number(target.slice(0, -1)); else it.reps = Number(target);
     for (const m of more) { const [k, v] = m.split('='); it[k] = Number(v); }
     return it;
   }),

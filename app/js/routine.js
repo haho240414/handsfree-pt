@@ -71,11 +71,24 @@ const SEC_PER_REP = { compound: 3.5, iso: 3, core: 2.5, cardio: 1.2 };
 const SETUP_SEC = 40; // 운동을 바꿀 때 자리·카메라 잡는 시간
 
 export const isHold = (id) => EXERCISE_BY_ID[id]?.kind === 'hold';
+/** 준비운동·마무리처럼 운동 인식 없이 시간만 재는 칸 */
+export const isTimer = (it) => !!it?.timer;
+/** 시간제(인터벌) 세트: 정해진 시간 동안 하고, 그동안 한 횟수를 기록 */
+export const isTimed = (it) => !it?.timer && it?.workSec != null;
+
+// 준비운동·마무리 스트레칭: 30초마다 동작을 바꿔 가며 음성으로 안내
+export const TIMER_STEPS = {
+  warmup: ['제자리 걷기', '팔 크게 돌리기', '몸통 좌우로 돌리기', '맨몸 스쿼트 천천히', '런지 자세로 엉덩이 늘리기', '가볍게 제자리 뛰기'],
+  cooldown: ['허벅지 앞 늘리기, 왼쪽', '허벅지 앞 늘리기, 오른쪽', '선 채로 허리 숙여 다리 뒤 늘리기', '가슴 펴고 팔 뒤로 늘리기', '어깨 늘리기, 좌우로', '천천히 심호흡'],
+};
+export const TIMER_NAME = { warmup: '준비운동', cooldown: '마무리 스트레칭' };
+export const timerItem = (kind, sec) => ({ timer: kind, name: TIMER_NAME[kind], sec, sets: 1, rest: 0 });
 
 /** 루틴 한 줄의 예상 시간(초): 세트마다 (동작 + 휴식) + 자리 잡기. 마지막 세트 뒤 휴식은 다음 운동으로 넘어가며 겹친다 */
 export function itemSeconds(it) {
+  if (isTimer(it)) return it.sec;
   const meta = PLAN_META[it.exercise] || { type: 'iso' };
-  const work = isHold(it.exercise) ? it.holdSec || 30 : (it.reps || 10) * SEC_PER_REP[meta.type];
+  const work = isTimed(it) ? it.workSec : isHold(it.exercise) ? it.holdSec || 30 : (it.reps || 10) * SEC_PER_REP[meta.type];
   return SETUP_SEC + it.sets * work + Math.max(0, it.sets - 1) * (it.rest ?? 60) + (it.rest ?? 60) * 0.5;
 }
 export const routineMinutes = (items) => Math.round(items.reduce((a, it) => a + itemSeconds(it), 0) / 60);
@@ -194,7 +207,7 @@ export function suggestFocus(sessions, now = Date.now()) {
  * @param {string} [o.seed]   같은 값이면 같은 루틴
  * @param {(id:string)=>number|null} [o.weightOf] 운동별 지난 무게
  */
-export function generateRoutine({ focus = 'auto', equipment = 'body', minutes = 30, level = 1, sessions = [], seed = '', weightOf = () => null } = {}) {
+export function generateRoutine({ focus = 'auto', equipment = 'body', minutes = 30, level = 1, sessions = [], seed = '', weightOf = () => null, warmup = true } = {}) {
   let reason = '';
   if (focus === 'auto') ({ focus, reason } = suggestFocus(sessions));
   const spec = FOCUS[focus] || FOCUS.full;
@@ -202,7 +215,9 @@ export function generateRoutine({ focus = 'auto', equipment = 'body', minutes = 
   const allowed = (id) => EQ_RANK[PLAN_META[id].eq] <= EQ_RANK[equipment];
   const used = new Set();
   const items = [];
-  const budget = minutes * 60;
+  // 준비운동·마무리(각 3분, 15분 루틴은 2분)는 시간 예산에서 먼저 뺀다
+  const wuSec = warmup ? (minutes <= 15 ? 120 : 180) : 0;
+  const budget = minutes * 60 - 2 * wuSec;
   let total = 0;
   // 맨몸 상체처럼 도구가 없어 채울 운동이 모자라면 코어·유산소로 목표 시간의 70%까지 채운다
   const extra = ['core', 'cardio', 'core', 'core', 'cardio', 'core'];
@@ -218,6 +233,12 @@ export function generateRoutine({ focus = 'auto', equipment = 'body', minutes = 
     const scored = pool.map((id) => ({ id, s: (EXERCISE_BY_ID[id].verified ? 1 : 0) + rand() * 0.9 + (PLAN_META[id].eq === equipment ? 0.3 : 0) }));
     scored.sort((a, b) => b.s - a.s);
     const it = defaultItem(scored[0].id, level, weightOf(scored[0].id));
+    // 유산소 루틴은 인터벌: 정해진 시간 동안 하고 쉬기 (빠른 동작은 횟수보다 시간이 정확)
+    if (focus === 'cardio' && PLAN_META[it.exercise].type === 'cardio') {
+      delete it.reps;
+      it.workSec = [20, 30, 40][level];
+      it.rest = [20, 15, 15][level];
+    }
     const sec = itemSeconds(it);
     if (items.length >= 3 && total + sec > budget * 1.08) break;
     items.push(it);
@@ -234,6 +255,10 @@ export function generateRoutine({ focus = 'auto', equipment = 'body', minutes = 
   // 하는 순서: 큰 운동 → 작은 운동 → 코어 → 유산소 마무리 (유산소 루틴은 섞어서 순환하도록 그대로)
   const RANK = { compound: 0, iso: 1, core: 2, cardio: 3 };
   if (focus !== 'cardio') items.sort((a, b) => RANK[PLAN_META[a.exercise].type] - RANK[PLAN_META[b.exercise].type]);
+  if (wuSec) {
+    items.unshift(timerItem('warmup', wuSec));
+    items.push(timerItem('cooldown', wuSec));
+  }
   return { name: `${spec.name} · ${EQUIPMENT[equipment]} · ${LEVELS[level]}`, focus, equipment, level, reason, items };
 }
 
@@ -252,7 +277,14 @@ export class PlanRunner {
   get finished() { return this.i >= this.items.length; }
   get item() { return this.items[this.i] || null; }
   /** 지금 세트의 목표 (횟수, 버티기 운동은 초) */
-  get target() { const it = this.item; return it ? (isHold(it.exercise) ? it.holdSec : it.reps) : null; }
+  /** 지금 세트의 목표: 횟수 / 버티기·준비운동·인터벌은 초 */
+  get target() {
+    const it = this.item;
+    if (!it) return null;
+    if (isTimer(it)) return it.sec;
+    if (isTimed(it)) return it.workSec;
+    return isHold(it.exercise) ? it.holdSec : it.reps;
+  }
 
   /** 지금 다음 단계 (휴식 중에 '다음: ○○' 표시) */
   peekNext() {
@@ -270,11 +302,12 @@ export class PlanRunner {
   completeSet(done, { manual = false } = {}) {
     const it = this.item;
     if (!it) return { rest: 0, exerciseDone: true, finished: true };
-    this.log.push({ i: this.i, exercise: it.exercise, setNo: this.setNo, target: this.target, done, manual, skipped: false });
-    const rest = it.rest ?? 60;
+    this.log.push({ i: this.i, exercise: it.exercise, setNo: this.setNo, target: this.target, done, manual, skipped: false, timer: isTimer(it), timed: isTimed(it) });
+    let rest = it.rest ?? 60;
     let exerciseDone = false;
     if (this.setNo < it.sets) this.setNo++;
     else { this.i++; this.setNo = 1; exerciseDone = true; }
+    if (!this.finished && isTimer(this.item)) rest = Math.min(rest, 15); // 마무리 스트레칭 앞에선 길게 쉬지 않는다
     return { rest: this.finished ? 0 : rest, exerciseDone, finished: this.finished };
   }
 
@@ -283,7 +316,7 @@ export class PlanRunner {
     const it = this.item;
     if (!it) return { finished: true };
     for (let s = this.setNo; s <= it.sets; s++) {
-      this.log.push({ i: this.i, exercise: it.exercise, setNo: s, target: this.target, done: 0, manual: false, skipped: true });
+      this.log.push({ i: this.i, exercise: it.exercise, setNo: s, target: this.target, done: 0, manual: false, skipped: true, timer: isTimer(it), timed: isTimed(it) });
     }
     this.i++;
     this.setNo = 1;
@@ -291,11 +324,15 @@ export class PlanRunner {
   }
 
   /** 전체 진행: 세트·횟수(버티기는 초 제외) */
+  /** 전체 진행: 세트(준비운동·마무리 제외)·횟수(횟수 목표인 세트만) */
   progress() {
-    const setsTotal = this.items.reduce((a, it) => a + it.sets, 0);
-    const done = this.log.filter((l) => !l.skipped && (l.done > 0 || l.manual)); // 0회로 끝낸 세트는 한 걸로 안 친다
-    const repsTarget = this.items.filter((it) => !isHold(it.exercise)).reduce((a, it) => a + it.sets * it.reps, 0);
-    const repsDone = done.filter((l) => !isHold(l.exercise)).reduce((a, l) => a + Math.min(l.done, l.target), 0);
-    return { setsTotal, setsDone: done.length, setsLogged: this.log.length, repsTarget, repsDone, exercises: this.items.length };
+    const ex = this.items.filter((it) => !isTimer(it));
+    const setsTotal = ex.reduce((a, it) => a + it.sets, 0);
+    const logs = this.log.filter((l) => !l.timer);
+    const done = logs.filter((l) => !l.skipped && (l.done > 0 || l.manual)); // 0회로 끝낸 세트는 한 걸로 안 친다
+    const counted = (it) => !isHold(it.exercise) && !isTimed(it);
+    const repsTarget = ex.filter(counted).reduce((a, it) => a + it.sets * it.reps, 0);
+    const repsDone = done.filter((l) => !l.timed && !isHold(l.exercise)).reduce((a, l) => a + Math.min(l.done, l.target), 0);
+    return { setsTotal, setsDone: done.length, setsLogged: logs.length, repsTarget, repsDone, exercises: ex.length };
   }
 }

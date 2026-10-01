@@ -191,6 +191,7 @@ export function computeFeatures(lm, wl) {
     wl[L.L_SHOULDER].y - wl[L.L_WRIST].y, minVis(lm, L.L_SHOULDER, L.L_WRIST),
     wl[L.R_SHOULDER].y - wl[L.R_WRIST].y, minVis(lm, L.R_SHOULDER, L.R_WRIST));
   f.wristH = wristH.avg; f.wristHMax = wristH.max;
+  f.wristHMin = wristH.L != null && Number.isFinite(wristH.L) && Number.isFinite(wristH.R) ? wristH.min : NaN; // 두 손이 다 보일 때 낮은 쪽(손 제스처용)
   f.shoulderOverWrist = -wristH.avg; // 푸시업: 팔 편 상태 ≈ 0.5, 내려가면 ≈ 0.15
 
   // 코가 어깨보다 얼마나 아래인지(m): 엎드린 푸시업은 ≥ 0 근처, 서거나 앉아 있으면 -0.15 안팎
@@ -304,6 +305,9 @@ export function computeFeatures(lm, wl) {
 
   return f;
 }
+
+/** 두 손을 머리 위로 쭉 뻗고 서 있는지 (휴식 끝내기 손 제스처) */
+export const isHandsUp = (f) => !!f && f.wristHMin > 0.12 && f.elbow > 135 && !(f.torsoTilt > 35);
 
 // 스무딩 대상 특징 (나머지는 원본 그대로)
 export const SMOOTH_KEYS = [

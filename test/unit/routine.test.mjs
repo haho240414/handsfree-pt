@@ -12,15 +12,21 @@ test('루틴 짜기: 장소에 맞는 운동만, 목표 시간 근처로, 3가�
     for (const focus of ['full', 'lower', 'upper', 'core', 'cardio']) {
       for (const minutes of [15, 30, 45, 60]) {
         const r = generateRoutine({ focus, equipment, minutes, level: 1, seed: '2026-10-01' });
-        assert.ok(r.items.length >= 3, `${equipment}/${focus}/${minutes}: ${r.items.length}가지`);
+        const ex = r.items.filter((it) => !it.timer);
+        assert.ok(ex.length >= 3, `${equipment}/${focus}/${minutes}: ${ex.length}가지`);
+        assert.equal(r.items[0].timer, 'warmup', '준비운동으로 시작');
+        assert.equal(r.items.at(-1).timer, 'cooldown', '마무리 스트레칭으로 끝');
         const rank = { body: 0, dumbbell: 1, gym: 2 };
-        for (const it of r.items) assert.ok(rank[PLAN_META[it.exercise].eq] <= rank[equipment], `${it.exercise} 은 ${equipment} 에서 못 함`);
-        assert.equal(new Set(r.items.map((it) => it.exercise)).size, r.items.length, '같은 운동 중복');
+        for (const it of ex) assert.ok(rank[PLAN_META[it.exercise].eq] <= rank[equipment], `${it.exercise} 은 ${equipment} 에서 못 함`);
+        assert.equal(new Set(ex.map((it) => it.exercise)).size, ex.length, '같은 운동 중복');
         const m = routineMinutes(r.items);
-        if (r.items.length > 3) assert.ok(m <= minutes * 1.15 + 2, `${equipment}/${focus}/${minutes}분 → ${m}분`);
+        if (ex.length > 3) assert.ok(m <= minutes * 1.15 + 2, `${equipment}/${focus}/${minutes}분 → ${m}분`);
+        if (focus === 'cardio') assert.ok(ex.some((it) => it.workSec), '유산소는 인터벌(시간제)');
       }
     }
   }
+  const noWu = generateRoutine({ focus: 'full', equipment: 'gym', minutes: 30, level: 1, seed: 'x', warmup: false });
+  assert.ok(!noWu.items.some((it) => it.timer), '준비운동 빼기');
   const gym45 = generateRoutine({ focus: 'full', equipment: 'gym', minutes: 45, level: 1, seed: 'x' });
   assert.ok(routineMinutes(gym45.items) >= 30, `헬스장 전신 45분이 너무 짧음: ${routineMinutes(gym45.items)}분`);
 });
@@ -126,4 +132,24 @@ test('점진적 과부하: 목표를 다 채웠으면 무게(맨몸은 횟수)�
   assert.equal(weightStep('lateral', 6), 1);
   const plank = progressItem({ exercise: 'plank', sets: 2, holdSec: 30 }, [{ start: 1, sets: [{ exercise: 'plank', kind: 'hold', holdSec: 31, plan: { target: 30 } }, { exercise: 'plank', kind: 'hold', holdSec: 30, plan: { target: 30 } }] }]);
   assert.equal(plank.holdSec, 35);
+});
+
+import { isTimer, isTimed, timerItem } from '../../app/js/routine.js';
+
+test('루틴 진행: 준비운동(시간) → 인터벌 세트 → 횟수 세트, 진행률은 준비운동을 빼고 센다', () => {
+  const pr = new PlanRunner([timerItem('warmup', 120), { exercise: 'jumpingjack', sets: 2, workSec: 30, rest: 15 }, { exercise: 'squat', sets: 1, reps: 10, rest: 60 }]);
+  assert.ok(isTimer(pr.item));
+  assert.equal(pr.target, 120);
+  pr.completeSet(120);
+  assert.ok(isTimed(pr.item));
+  assert.equal(pr.target, 30);
+  pr.completeSet(24);
+  pr.completeSet(22);
+  pr.completeSet(10);
+  const p = pr.progress();
+  assert.equal(p.setsTotal, 3);
+  assert.equal(p.setsDone, 3);
+  assert.equal(p.repsTarget, 10, '인터벌은 횟수 목표가 없음');
+  assert.equal(p.repsDone, 10);
+  assert.ok(pr.finished);
 });

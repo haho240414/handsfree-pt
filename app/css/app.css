@@ -490,3 +490,5 @@ dialog h3 { margin: 0 0 10px; }
 .wo-adjust .adj[hidden] { display: none; }
 .wo-adjust .wo-btn { width: 46px; height: 46px; font-size: 24px; padding: 0; }
 .wo-adjust span { min-width: 74px; text-align: center; font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums; }
+.r-timer .r-name { color: var(--text-2); }
+.r-timer .r-no { background: transparent; }

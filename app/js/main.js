@@ -9,7 +9,7 @@ import { isNative, NativeApp, NativeTTS, canShareFile, shareTextFile, shareBinar
 import { summarize as tempoSummary, speeds as tempoSpeeds } from './engine/tempo.js';
 import { listCameras, cameraNames } from './camera.js';
 import { loadDemos, playDemo, hasDemo } from './demo.js';
-import { generateRoutine, routineMinutes, defaultItem, isHold, PLAN_META, FOCUS, EQUIPMENT, LEVELS } from './routine.js';
+import { generateRoutine, routineMinutes, defaultItem, isHold, isTimer, isTimed, timerItem, TIMER_NAME, PLAN_META, FOCUS, EQUIPMENT, LEVELS } from './routine.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -66,9 +66,10 @@ function renderHome() {
     ['회', reps, '오늘 반복'], ['세트', sets, '세트'], ['분', min, '운동 시간'],
   ].map(([u, v, l]) => `<div class="stat"><div class="num">${v}<small style="font-size:14px"> ${u}</small></div><div class="lbl">${l}</div></div>`).join('');
   const draft = store.routineDraft();
-  $('routine-sub').textContent = draft?.items?.length
-    ? `${exName(draft.items[0].exercise)} 외 ${draft.items.length - 1}가지 · 약 ${routineMinutes(draft.items)}분`
-    : '루틴을 짜 주고, 지금 할 운동·횟수를 안내해요';
+  const dEx = (draft?.items || []).filter((x) => !isTimer(x));
+  $('routine-sub').textContent = dEx.length
+    ? `${exName(dEx[0].exercise)} 외 ${dEx.length - 1}가지 · 약 ${routineMinutes(draft.items)}분`
+    : '루틴을 짜 주고, 할 운동·횟수를 안내해요';
   const recent = store.sessions().slice(0, 5);
   $('recent-list').innerHTML = recent.length
     ? recent.map(sessionItem).join('')
@@ -138,8 +139,9 @@ const FOCUS_OPTS = [['auto', '추천'], ...Object.entries(FOCUS).map(([k, v]) =>
 const MIN_OPTS = [15, 30, 45, 60];
 const fmtSec = (sec) => (sec < 60 ? `${sec}초` : `${Math.floor(sec / 60)}분${sec % 60 ? ` ${sec % 60}초` : ''}`);
 const itemLine = (it) => {
+  if (isTimer(it)) return `${fmtSec(it.sec)} · 30초쯤마다 동작을 바꿔 가며 음성으로 안내`;
   const meta = PLAN_META[it.exercise];
-  const what = isHold(it.exercise) ? `${it.holdSec}초` : `${it.reps}회`;
+  const what = isTimed(it) ? `${it.workSec}초 동안(인터벌)` : isHold(it.exercise) ? `${it.holdSec}초` : `${it.reps}회`;
   return `${it.sets}세트 × ${what} · 휴식 ${fmtSec(it.rest)}${it.weight ? ` · ${it.weight}kg` : ''}${meta?.note ? ` <span class="muted">(${esc(meta.note)})</span>` : ''}`;
 };
 
@@ -165,6 +167,7 @@ function renderRoutine() {
     <div class="rm-row"><span>장소</span>${segR('equipment', Object.entries(EQUIPMENT), p.equipment)}</div>
     <div class="rm-row"><span>시간</span>${segR('minutes', MIN_OPTS.map((m) => [m, `${m}분`]), p.minutes)}</div>
     <div class="rm-row"><span>강도</span>${segR('level', LEVELS.map((l, i) => [i, l]), p.level)}</div>
+    <div class="rm-row"><span>준비운동·마무리 스트레칭</span>${segR('warmup', [['1', '넣기'], ['0', '빼기']], p.warmup === false ? '0' : '1')}</div>
     <div class="btn-row"><button class="btn btn-secondary" id="btn-make-routine" type="button">${d ? '처음 구성으로' : '루틴 짜기'}</button>
     ${d ? '<button class="btn btn-secondary" id="btn-shuffle-routine" type="button">🔄 다른 운동으로</button>' : ''}</div>
   </div>`;
@@ -173,9 +176,9 @@ function renderRoutine() {
     html += `<div class="routine-head"><div><b>${esc(d.name || '내 루틴')}</b><div class="muted small">${d.items.length}가지 · ${sets}세트 · 약 ${routineMinutes(d.items)}분</div></div>
       <button class="mini-btn" id="btn-save-routine" type="button">저장</button></div>
       ${d.reason ? `<p class="muted small routine-reason">💡 ${esc(d.reason)}</p>` : ''}
-      <div class="card routine-list">${d.items.map((it, i) => `<div class="r-item">
-        <div class="r-no">${i + 1}</div>
-        <div class="r-main"><button type="button" class="r-name" data-r-demo="${esc(it.exercise)}">${esc(exName(it.exercise))}${EXERCISE_BY_ID[it.exercise]?.verified ? '' : ' <span class="beta">베타</span>'}${hasDemo(it.exercise) ? ' <span class="demo-ico" aria-label="동작 보기">▶</span>' : ''}</button>
+      <div class="card routine-list">${d.items.map((it, i) => `<div class="r-item${isTimer(it) ? ' r-timer' : ''}">
+        <div class="r-no">${isTimer(it) ? '⏱' : i + 1 - d.items.slice(0, i).filter(isTimer).length}</div>
+        <div class="r-main">${isTimer(it) ? `<div class="r-name">${esc(it.name)}</div>` : `<button type="button" class="r-name" data-r-demo="${esc(it.exercise)}">${esc(exName(it.exercise))}${EXERCISE_BY_ID[it.exercise]?.verified ? '' : ' <span class="beta">베타</span>'}${hasDemo(it.exercise) ? ' <span class="demo-ico" aria-label="동작 보기">▶</span>' : ''}</button>`}
           <div class="r-sub">${itemLine(it)}</div>${it.why ? `<div class="r-why">${/\+/.test(it.why) ? '⬆ ' : ''}${esc(it.why)}</div>` : ''}</div>
         <div class="r-ctl">
           <button class="mini-btn" data-r-edit="${i}" type="button">수정</button>
@@ -205,7 +208,7 @@ $('routine-body').addEventListener('click', async (e) => {
   if (seg) {
     const key = seg.parentElement.dataset.rseg;
     const raw = seg.dataset.v;
-    store.setRoutinePrefs({ [key]: /^\d+$/.test(raw) ? Number(raw) : raw });
+    store.setRoutinePrefs({ [key]: key === 'warmup' ? raw === '1' : /^\d+$/.test(raw) ? Number(raw) : raw });
     makeRoutine(0); // 조건을 바꾸면 바로 다시 짠다
     renderRoutine();
     return;
@@ -223,7 +226,11 @@ $('routine-body').addEventListener('click', async (e) => {
     return;
   }
   const ed = e.target.closest('[data-r-edit]');
-  if (ed) { editRoutineItem(Number(ed.dataset.rEdit)); return; }
+  if (ed) {
+    const i = Number(ed.dataset.rEdit);
+    if (isTimer(store.routineDraft()?.items?.[i])) editTimerItem(i); else editRoutineItem(i);
+    return;
+  }
   const dm = e.target.closest('[data-r-demo]');
   if (dm) { showExerciseInfo(dm.dataset.rDemo); return; }
   if (e.target.closest('#btn-r-add')) { editRoutineItem(null); return; }
@@ -265,7 +272,10 @@ function editRoutineItem(idx) {
     <h3>${it ? '운동 수정' : '운동 추가'}</h3>
     <div class="field"><label>운동</label><select id="ri-ex">${opts}</select></div>
     ${step('ri-sets', cur.sets, '세트', [1])}
-    ${step('ri-target', isHold(cur.exercise) ? cur.holdSec : cur.reps, '목표 횟수', [1, 5])}
+    <div class="field" id="ri-mode-field"><label>목표 방식</label><div class="seg" id="ri-mode">
+      <button type="button" data-mode="reps" aria-pressed="${!isTimed(cur)}">횟수</button>
+      <button type="button" data-mode="time" aria-pressed="${isTimed(cur)}">시간(인터벌)</button></div></div>
+    ${step('ri-target', isTimed(cur) ? cur.workSec : isHold(cur.exercise) ? cur.holdSec : cur.reps, '목표 횟수', [1, 5])}
     ${step('ri-rest', cur.rest, '휴식(초)', [15])}
     <div class="field" id="ri-w-field"><label>무게 (kg, 선택)</label><input type="number" id="ri-w" inputmode="decimal" min="0" step="0.5" value="${cur.weight ?? ''}"></div>
     <div class="btn-row" style="margin-top:14px">
@@ -273,9 +283,12 @@ function editRoutineItem(idx) {
       <button value="cancel" class="btn btn-ghost">취소</button>
       <button value="ok" class="btn btn-primary">${it ? '저장' : '추가'}</button>
     </div></form>`;
+  let mode = isTimed(cur) ? 'time' : 'reps';
   const sync = (changed) => {
     const ex = $('ri-ex').value;
-    $('ri-target-l').textContent = isHold(ex) ? '목표 시간(초)' : '목표 횟수';
+    $('ri-mode-field').hidden = isHold(ex);
+    $('ri-mode').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+    $('ri-target-l').textContent = isHold(ex) ? '목표 시간(초)' : mode === 'time' ? '운동 시간(초) — 그동안 한 횟수를 기록' : '목표 횟수';
     $('ri-w-field').hidden = isHold(ex); // 맨몸 운동도 덤벨·바벨을 들 수 있어서 무게 칸은 보여준다
     if (changed) { // 운동을 바꾸면 그 운동의 기본값으로
       const def = defaultItem(ex, store.routinePrefs().level, store.lastWeight(ex));
@@ -285,7 +298,14 @@ function editRoutineItem(idx) {
     }
   };
   sync(false);
-  $('ri-ex').onchange = () => sync(true);
+  $('ri-ex').onchange = () => { mode = 'reps'; sync(true); };
+  $('ri-mode').onclick = (ev) => {
+    const b = ev.target.closest('[data-mode]');
+    if (!b || b.dataset.mode === mode) return;
+    mode = b.dataset.mode;
+    $('ri-target').value = mode === 'time' ? 30 : (defaultItem($('ri-ex').value, store.routinePrefs().level).reps ?? 10);
+    sync(false);
+  };
   dlg.querySelectorAll('[data-st]').forEach((b) => {
     b.onclick = () => { const inp = $(b.dataset.st); inp.value = Math.max(0, Number(inp.value || 0) + Number(b.dataset.d)); };
   });
@@ -306,7 +326,9 @@ function editRoutineItem(idx) {
       sets: Math.min(20, Math.max(1, Math.round(Number($('ri-sets').value || 1)))),
       rest: Math.min(600, Math.max(0, Math.round(Number($('ri-rest').value || 0)))),
     };
-    if (isHold(ex)) next.holdSec = target; else next.reps = target;
+    if (isHold(ex)) next.holdSec = target;
+    else if (mode === 'time') next.workSec = target;
+    else next.reps = target;
     const w = $('ri-w').value;
     if (w !== '' && !isHold(ex) && Number(w) > 0) { next.weight = Number(w); store.rememberWeight(ex, Number(w)); }
     if (it) d.items[idx] = next; else d.items.push(next);
@@ -331,6 +353,32 @@ function showExerciseInfo(id) {
   const stop = hasDemo(id) ? playDemo($('demo-canvas'), id, { color: getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim() || '#4a7a00', dim: 'rgba(120,130,140,.45)' }) : null;
   d.onclose = () => stop?.();
   d.showModal();
+}
+
+// 준비운동·마무리 시간 고치기
+function editTimerItem(idx) {
+  const d = store.routineDraft();
+  const it = d?.items?.[idx];
+  if (!it) return;
+  const dlg = $('dialog');
+  dlg.innerHTML = `<form method="dialog"><h3>${esc(it.name)}</h3>
+    <div class="field"><label>시간(초)</label><div class="stepper">
+      <button type="button" class="mini-btn" data-st="rt-sec" data-d="-30">−30</button>
+      <input type="number" id="rt-sec" inputmode="numeric" min="30" value="${it.sec}">
+      <button type="button" class="mini-btn" data-st="rt-sec" data-d="30">+30</button></div></div>
+    <div class="btn-row" style="margin-top:14px"><button type="button" class="btn btn-danger" id="rt-del">빼기</button>
+      <button value="cancel" class="btn btn-ghost">취소</button><button value="ok" class="btn btn-primary">저장</button></div></form>`;
+  dlg.querySelectorAll('[data-st]').forEach((b) => {
+    b.onclick = () => { const inp = $(b.dataset.st); inp.value = Math.max(30, Number(inp.value || 0) + Number(b.dataset.d)); };
+  });
+  $('rt-del').onclick = () => { d.items.splice(idx, 1); store.setRoutineDraft({ ...d, edited: true }); dlg.close('deleted'); renderRoutine(); };
+  dlg.onclose = () => {
+    if (dlg.returnValue !== 'ok') return;
+    d.items[idx] = { ...it, sec: Math.max(30, Math.round(Number($('rt-sec').value || 0))) };
+    store.setRoutineDraft({ ...d, edited: true });
+    renderRoutine();
+  };
+  dlg.showModal();
 }
 
 export function promptDialog(title, label, value = '') {
@@ -403,7 +451,7 @@ function renderSummary() {
         ? (bad ? `<span class="q warn">자세 지적 ${bad}회</span>` : '<span class="q">좋은 자세 ✓</span>')
         : '<span class="q"></span>';
       html += `<div class="set-row"><div class="set-no">${i + 1}</div>
-        <div class="set-main"><div class="v">${setValue(set)}${set.plan ? ` <span class="muted plan-tgt">/ 목표 ${set.plan.target}${set.kind === 'hold' ? '초' : '회'}${(set.kind === 'hold' ? set.holdSec : set.reps) >= set.plan.target ? ' ✓' : ''}${set.plan.manual ? ' · 직접 완료' : ''}</span>` : ''}${set.weight ? ` <span class="muted" style="font-size:14px">× ${set.weight}kg</span>` : ''}</div>${q}${tempoRow(set)}</div>
+        <div class="set-main"><div class="v">${setValue(set)}${set.plan ? ` <span class="muted plan-tgt">${set.plan.timed ? `/ ${set.plan.target}초 동안` : `/ 목표 ${set.plan.target}${set.kind === 'hold' ? '초' : '회'}${(set.kind === 'hold' ? set.holdSec : set.reps) >= set.plan.target ? ' ✓' : ''}`}${set.plan.manual ? ' · 직접 완료' : ''}</span>` : ''}${set.weight ? ` <span class="muted" style="font-size:14px">× ${set.weight}kg</span>` : ''}</div>${q}${tempoRow(set)}</div>
         <div class="set-edit"><button class="mini-btn" data-edit-set="${esc(set.id)}">수정</button></div></div>`;
       for (const [code, n] of Object.entries(set.issues || {})) {
         const info = formInfo(ex, code);
@@ -616,6 +664,7 @@ function renderSettings() {
         <b class="rest-val">${fmtRest(st.rest)}</b>
         <button type="button" class="mini-btn" data-rest-step="15">+15초</button></div>
         ${seg('rest', [[0, '끔'], [30, '30초'], [60, '1분'], [90, '1분30'], [120, '2분'], [180, '3분']])}</div>`, true)}
+      ${row('손 들어 휴식 끝내기', '쉬는 동안 두 손을 머리 위로 쭉 뻗고 2초 — 폰을 만지지 않고 다음 세트로 (팔을 머리 위로 드는 운동 앞에선 꺼져요)', sw('handGesture'))}
       ${row('다시 시작 알림', '휴식이 끝나기 전에 소리로 알려줘요 (여러 개 고를 수 있어요). 끝나면 삐 소리와 함께 안내',
         `<div class="chips">${chip(30, '30초 전')}${chip(10, '10초 전')}${chip(5, '5초 전')}${chip(3, '셋·둘·하나')}</div>`, true)}
     </div>
