@@ -8,14 +8,26 @@ A() { timeout 90 adb "$@"; }
 echo "== 설치"; A install -r "$APK" || exit 1
 A shell pm grant "$PKG" android.permission.CAMERA
 A logcat -c
-echo "== 실행"; A shell am start -n "$PKG/.MainActivity"
-sleep 20
+# 에뮬레이터가 막 부팅된 직후엔 실행 명령이 묻히기도 한다(실측: 20초 뒤 홈 화면, 프로세스 없음) → 프로세스가 뜰 때까지 최대 3번
+PID=""
+for TRY in 1 2 3; do
+  echo "== 실행 ($TRY)"; A shell am start -W -n "$PKG/.MainActivity"
+  for _ in $(seq 1 15); do
+    sleep 2
+    PID="$(A shell pidof "$PKG" | tr -d '\r')"
+    [ -n "$PID" ] && break
+  done
+  [ -n "$PID" ] && break
+  A logcat -d > "$OUT/logcat_try$TRY.txt"
+done
+sleep 12 # WebView 가 화면을 그릴 시간
 A exec-out screencap -p > "$OUT/1_home.png"
-PID="$(A shell pidof "$PKG" | tr -d '\r')"
-echo "== 앱 프로세스 $PID"
+PID2="$(A shell pidof "$PKG" | tr -d '\r')"
+echo "== 앱 프로세스 $PID (12초 뒤 $PID2)"
+[ -n "$PID2" ] && PID="$PID2"
 A forward tcp:9222 "localabstract:webview_devtools_remote_${PID}"
 node .github/scripts/webview-check.mjs "$OUT"
 STATUS=$?
-A logcat -d -t 3000 > "$OUT/logcat.txt"
+A logcat -d > "$OUT/logcat.txt"
 echo "== 점검 종료 코드 $STATUS"
 exit $STATUS
