@@ -20,7 +20,12 @@ export const DEFAULT_SETTINGS = {
   theme: 'auto',        // auto | light | dark
 };
 
-const blank = () => ({ sessions: [], settings: { ...DEFAULT_SETTINGS }, weights: {}, lastPick: [] });
+const blank = () => ({
+  sessions: [], settings: { ...DEFAULT_SETTINGS }, weights: {}, lastPick: [],
+  routineDraft: null,  // 지금 짜 둔 오늘 루틴 { name, focus, equipment, level, reason, items, seedN }
+  routinePrefs: { focus: 'auto', equipment: 'body', minutes: 30, level: 1 },
+  routines: [],        // 저장한 내 루틴 [{ id, name, items, savedAt }]
+});
 
 let state = load();
 
@@ -75,6 +80,29 @@ export function rememberWeight(ex, kg) {
   persist();
 }
 
+/* ---------- 오늘의 루틴(PT 모드) ---------- */
+export const routineDraft = () => state.routineDraft || null;
+export function setRoutineDraft(r) {
+  state.routineDraft = r;
+  persist();
+}
+export const routinePrefs = () => ({ focus: 'auto', equipment: 'body', minutes: 30, level: 1, ...(state.routinePrefs || {}) });
+export function setRoutinePrefs(p) {
+  state.routinePrefs = { ...routinePrefs(), ...p };
+  persist();
+}
+export const routines = () => state.routines || [];
+export function saveRoutine(r) {
+  const list = routines().filter((x) => x.id !== r.id);
+  list.unshift(r);
+  state.routines = list.slice(0, 30);
+  persist();
+}
+export function deleteRoutine(id) {
+  state.routines = routines().filter((x) => x.id !== id);
+  persist();
+}
+
 export const lastPick = () => state.lastPick || [];
 export function setLastPick(ids) {
   state.lastPick = ids;
@@ -97,6 +125,10 @@ export function importJSON(text) {
   }
   state.sessions.sort((a, b) => b.start - a.start);
   if (data.weights) state.weights = { ...data.weights, ...state.weights };
+  if (Array.isArray(data.routines)) {
+    const have = new Set(routines().map((r) => r.id));
+    state.routines = [...routines(), ...data.routines.filter((r) => r?.id && !have.has(r.id))];
+  }
   persist();
   return added;
 }

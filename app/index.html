@@ -27,6 +27,10 @@
       <span class="btn-title">운동 시작</span>
       <span class="btn-sub">운동 종류를 자동으로 알아봐요</span>
     </button>
+    <button class="btn btn-secondary btn-lg btn-routine" id="btn-open-routine">
+      <span class="btn-title">오늘의 루틴 <span class="pt-badge">PT 모드</span></span>
+      <span class="btn-sub" id="routine-sub">루틴을 짜 주고, 지금 할 운동·횟수를 안내해요</span>
+    </button>
     <button class="btn btn-secondary btn-lg" id="btn-start-pick">
       <span class="btn-title">운동 골라서 시작</span>
       <span class="btn-sub">헬스장 루틴 · 무게 기록</span>
@@ -58,6 +62,19 @@
     </div>
   </section>
 
+  <!-- 오늘의 루틴 (PT 모드) -->
+  <section id="screen-routine" class="screen page" hidden>
+    <header class="topbar">
+      <button class="icon-btn" data-back aria-label="뒤로">‹</button>
+      <div class="topbar-title">오늘의 루틴</div>
+      <span></span>
+    </header>
+    <div id="routine-body"></div>
+    <div class="sticky-bottom">
+      <button class="btn btn-primary btn-lg" id="btn-start-routine" disabled>루틴을 짜 주세요</button>
+    </div>
+  </section>
+
   <!-- 운동 중 -->
   <section id="screen-workout" class="screen workout" hidden>
     <video id="cam" playsinline muted autoplay></video>
@@ -70,9 +87,13 @@
         <button class="wo-btn wo-end" id="btn-end">종료</button>
       </div>
     </div>
+    <div class="wo-plan" id="wo-plan" hidden>
+      <div class="wo-plan-top"><span id="wo-plan-step"></span><span id="wo-plan-sets"></span></div>
+      <div class="wo-plan-bar"><i id="wo-plan-fill"></i></div>
+    </div>
     <div class="wo-center">
       <div class="wo-exercise" id="wo-exercise"></div>
-      <div class="wo-count" id="wo-count"></div>
+      <div class="wo-count-row"><div class="wo-count" id="wo-count"></div><div class="wo-target" id="wo-target" hidden></div></div>
       <div class="wo-message" id="wo-message"></div>
       <div class="wo-cue" id="wo-cue" hidden></div>
       <div class="wo-rest-actions" id="wo-rest-actions" hidden>
@@ -81,6 +102,13 @@
       </div>
     </div>
     <div class="wo-bottom" id="wo-bottom">
+      <div class="wo-next" id="wo-next" hidden>
+        <div class="wo-next-text" id="wo-next-text"></div>
+        <div class="wo-next-actions">
+          <button class="wo-btn" id="btn-plan-done" type="button">세트 완료</button>
+          <button class="wo-btn" id="btn-plan-skip" type="button">다음 운동 ▸</button>
+        </div>
+      </div>
       <div class="wo-tempo" id="wo-tempo" hidden>
         <div class="wo-tempo-text" id="wo-tempo-text"></div>
         <canvas id="wo-tempo-canvas" aria-hidden="true"></canvas>

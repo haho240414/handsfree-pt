@@ -8,6 +8,7 @@ import { esc, exName, DAYS, fmtDate, fmtTime, minutes, setValue, sessionTotals, 
 import { isNative, NativeApp, NativeTTS, canShareFile, shareTextFile, shareBinaryFile } from './native.js';
 import { summarize as tempoSummary, speeds as tempoSpeeds } from './engine/tempo.js';
 import { listCameras, cameraNames } from './camera.js';
+import { generateRoutine, routineMinutes, defaultItem, isHold, PLAN_META, FOCUS, EQUIPMENT, LEVELS } from './routine.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -63,6 +64,10 @@ function renderHome() {
   $('today-card').innerHTML = [
     ['회', reps, '오늘 반복'], ['세트', sets, '세트'], ['분', min, '운동 시간'],
   ].map(([u, v, l]) => `<div class="stat"><div class="num">${v}<small style="font-size:14px"> ${u}</small></div><div class="lbl">${l}</div></div>`).join('');
+  const draft = store.routineDraft();
+  $('routine-sub').textContent = draft?.items?.length
+    ? `${exName(draft.items[0].exercise)} 외 ${draft.items.length - 1}가지 · 약 ${routineMinutes(draft.items)}분`
+    : '루틴을 짜 주고, 지금 할 운동·횟수를 안내해요';
   const recent = store.sessions().slice(0, 5);
   $('recent-list').innerHTML = recent.length
     ? recent.map(sessionItem).join('')
@@ -124,6 +129,206 @@ const workout = new Workout({
 });
 $('btn-start-auto').addEventListener('click', () => workout.start({ candidates: null }));
 $('btn-start-pick').addEventListener('click', () => push('screen-pick', renderPick));
+$('btn-open-routine').addEventListener('click', () => push('screen-routine', renderRoutine));
+
+/* ---------- 오늘의 루틴 (PT 모드) ---------- */
+const todayKey = () => new Date().toISOString().slice(0, 10);
+const FOCUS_OPTS = [['auto', '추천'], ...Object.entries(FOCUS).map(([k, v]) => [k, v.name])];
+const MIN_OPTS = [15, 30, 45, 60];
+const fmtSec = (sec) => (sec < 60 ? `${sec}초` : `${Math.floor(sec / 60)}분${sec % 60 ? ` ${sec % 60}초` : ''}`);
+const itemLine = (it) => {
+  const meta = PLAN_META[it.exercise];
+  const what = isHold(it.exercise) ? `${it.holdSec}초` : `${it.reps}회`;
+  return `${it.sets}세트 × ${what} · 휴식 ${fmtSec(it.rest)}${it.weight ? ` · ${it.weight}kg` : ''}${meta?.note ? ` <span class="muted">(${esc(meta.note)})</span>` : ''}`;
+};
+
+function makeRoutine(seedN = 0) {
+  const p = store.routinePrefs();
+  const r = generateRoutine({
+    ...p, sessions: store.sessions(), seed: `${todayKey()}#${seedN}`, weightOf: (id) => store.lastWeight(id),
+  });
+  store.setRoutineDraft({ ...r, seedN, madeAt: Date.now() });
+}
+
+function renderRoutine() {
+  // 처음 열거나, 어제 자동으로 짠 루틴을 손대지 않았으면 오늘 것으로 새로 짠다
+  const old = store.routineDraft();
+  if (!old || (old.madeAt && !old.edited && new Date(old.madeAt).toDateString() !== new Date().toDateString())) makeRoutine(0);
+  const p = store.routinePrefs();
+  const d = store.routineDraft();
+  const segR = (key, opts, cur) => `<div class="seg" data-rseg="${key}">${opts.map(([v, l]) =>
+    `<button type="button" data-v="${v}" aria-pressed="${String(cur) === String(v)}">${l}</button>`).join('')}</div>`;
+  let html = `<div class="card routine-make">
+    <div class="rm-title">PT가 짜 주는 오늘 운동</div>
+    <div class="rm-row"><span>부위</span>${segR('focus', FOCUS_OPTS, p.focus)}</div>
+    <div class="rm-row"><span>장소</span>${segR('equipment', Object.entries(EQUIPMENT), p.equipment)}</div>
+    <div class="rm-row"><span>시간</span>${segR('minutes', MIN_OPTS.map((m) => [m, `${m}분`]), p.minutes)}</div>
+    <div class="rm-row"><span>강도</span>${segR('level', LEVELS.map((l, i) => [i, l]), p.level)}</div>
+    <div class="btn-row"><button class="btn btn-secondary" id="btn-make-routine" type="button">${d ? '처음 구성으로' : '루틴 짜기'}</button>
+    ${d ? '<button class="btn btn-secondary" id="btn-shuffle-routine" type="button">🔄 다른 운동으로</button>' : ''}</div>
+  </div>`;
+  if (d?.items) {
+    const sets = d.items.reduce((a, it) => a + it.sets, 0);
+    html += `<div class="routine-head"><div><b>${esc(d.name || '내 루틴')}</b><div class="muted small">${d.items.length}가지 · ${sets}세트 · 약 ${routineMinutes(d.items)}분</div></div>
+      <button class="mini-btn" id="btn-save-routine" type="button">저장</button></div>
+      ${d.reason ? `<p class="muted small routine-reason">💡 ${esc(d.reason)}</p>` : ''}
+      <div class="card routine-list">${d.items.map((it, i) => `<div class="r-item">
+        <div class="r-no">${i + 1}</div>
+        <div class="r-main"><div class="r-name">${esc(exName(it.exercise))}${EXERCISE_BY_ID[it.exercise]?.verified ? '' : ' <span class="beta">베타</span>'}</div>
+          <div class="r-sub">${itemLine(it)}</div></div>
+        <div class="r-ctl">
+          <button class="mini-btn" data-r-edit="${i}" type="button">수정</button>
+          <button class="mini-btn" data-r-up="${i}" type="button" aria-label="위로" ${i ? '' : 'disabled'}>↑</button>
+          <button class="mini-btn" data-r-down="${i}" type="button" aria-label="아래로" ${i < d.items.length - 1 ? '' : 'disabled'}>↓</button>
+        </div></div>`).join('')}
+        <button class="btn btn-ghost" id="btn-r-add" type="button">+ 운동 추가</button>
+      </div>
+      <p class="muted small">진행 중엔 지금 할 운동·세트·목표 횟수가 화면에 나오고, 목표를 채우면 알아서 휴식 → 다음 세트로 넘어가요.
+      운동을 정해 두고 세서 자동 인식보다 정확해요. 자리 잡을 때 화면 안내를 따라 주세요.</p>`;
+  }
+  const saved = store.routines();
+  if (saved.length) {
+    html += `<h2 class="section-title">내 루틴</h2><div class="card">${saved.map((r) => `<div class="r-saved">
+      <div><b>${esc(r.name)}</b><div class="muted small">${r.items.length}가지 · 약 ${routineMinutes(r.items)}분</div></div>
+      <div class="r-ctl"><button class="mini-btn" data-r-load="${esc(r.id)}" type="button">불러오기</button>
+      <button class="mini-btn" data-r-del="${esc(r.id)}" type="button" aria-label="삭제">✕</button></div></div>`).join('')}</div>`;
+  }
+  $('routine-body').innerHTML = html;
+  const btn = $('btn-start-routine');
+  btn.disabled = !d?.items?.length;
+  btn.textContent = d?.items?.length ? `이 루틴으로 시작 (약 ${routineMinutes(d.items)}분)` : '루틴을 짜 주세요';
+}
+
+$('routine-body').addEventListener('click', async (e) => {
+  const seg = e.target.closest('[data-rseg] button');
+  if (seg) {
+    const key = seg.parentElement.dataset.rseg;
+    const raw = seg.dataset.v;
+    store.setRoutinePrefs({ [key]: /^\d+$/.test(raw) ? Number(raw) : raw });
+    makeRoutine(0); // 조건을 바꾸면 바로 다시 짠다
+    renderRoutine();
+    return;
+  }
+  const d = store.routineDraft();
+  if (e.target.closest('#btn-make-routine')) { makeRoutine(0); renderRoutine(); return; }
+  if (e.target.closest('#btn-shuffle-routine')) { makeRoutine((d?.seedN || 0) + 1); renderRoutine(); return; }
+  const mv = e.target.closest('[data-r-up],[data-r-down]');
+  if (mv && d) {
+    const i = Number(mv.dataset.rUp ?? mv.dataset.rDown);
+    const j = mv.dataset.rUp != null ? i - 1 : i + 1;
+    [d.items[i], d.items[j]] = [d.items[j], d.items[i]];
+    store.setRoutineDraft({ ...d, edited: true });
+    renderRoutine();
+    return;
+  }
+  const ed = e.target.closest('[data-r-edit]');
+  if (ed) { editRoutineItem(Number(ed.dataset.rEdit)); return; }
+  if (e.target.closest('#btn-r-add')) { editRoutineItem(null); return; }
+  if (e.target.closest('#btn-save-routine') && d) {
+    const name = await promptDialog('루틴 저장', '이름', d.name || '내 루틴');
+    if (name == null) return;
+    store.saveRoutine({ id: d.id || store.uid(), name: name || '내 루틴', items: d.items, savedAt: Date.now() });
+    store.setRoutineDraft({ ...d, name: name || d.name });
+    toast('내 루틴에 저장했어요');
+    renderRoutine();
+    return;
+  }
+  const ld = e.target.closest('[data-r-load]');
+  if (ld) {
+    const r = store.routines().find((x) => x.id === ld.dataset.rLoad);
+    if (r) { store.setRoutineDraft({ name: r.name, id: r.id, items: r.items.map((it) => ({ ...it })), reason: '', edited: true }); renderRoutine(); window.scrollTo(0, 0); }
+    return;
+  }
+  const del = e.target.closest('[data-r-del]');
+  if (del && await confirmDialog('이 루틴을 지울까요?', '저장한 루틴만 지워지고 운동 기록은 남아요.', '지우기')) {
+    store.deleteRoutine(del.dataset.rDel);
+    renderRoutine();
+  }
+});
+
+// 루틴 한 줄 수정/추가: 운동·세트·목표 횟수(버티기는 초)·휴식·무게
+function editRoutineItem(idx) {
+  const d = store.routineDraft() || { name: '내 루틴', items: [], reason: '' };
+  const it = idx == null ? null : d.items[idx];
+  const dlg = $('dialog');
+  const cur = it || defaultItem('squat', store.routinePrefs().level);
+  const opts = GROUPS.map((g) => `<optgroup label="${g}">${EXERCISES.filter((x) => x.group === g).map((x) =>
+    `<option value="${x.id}" ${cur.exercise === x.id ? 'selected' : ''}>${esc(x.name)}${x.verified ? '' : ' (베타)'}</option>`).join('')}</optgroup>`).join('');
+  const step = (id, val, label, deltas) => `<div class="field"><label id="${id}-l">${label}</label><div class="stepper">
+    ${[...deltas].reverse().map((dl) => `<button type="button" class="mini-btn" data-st="${id}" data-d="${-dl}">−${dl}</button>`).join('')}
+    <input type="number" id="${id}" inputmode="numeric" min="0" value="${val}">
+    ${deltas.map((dl) => `<button type="button" class="mini-btn" data-st="${id}" data-d="${dl}">+${dl}</button>`).join('')}</div></div>`;
+  dlg.innerHTML = `<form method="dialog">
+    <h3>${it ? '운동 수정' : '운동 추가'}</h3>
+    <div class="field"><label>운동</label><select id="ri-ex">${opts}</select></div>
+    ${step('ri-sets', cur.sets, '세트', [1])}
+    ${step('ri-target', isHold(cur.exercise) ? cur.holdSec : cur.reps, '목표 횟수', [1, 5])}
+    ${step('ri-rest', cur.rest, '휴식(초)', [15])}
+    <div class="field" id="ri-w-field"><label>무게 (kg, 선택)</label><input type="number" id="ri-w" inputmode="decimal" min="0" step="0.5" value="${cur.weight ?? ''}"></div>
+    <div class="btn-row" style="margin-top:14px">
+      ${it ? '<button type="button" class="btn btn-danger" id="ri-del">빼기</button>' : ''}
+      <button value="cancel" class="btn btn-ghost">취소</button>
+      <button value="ok" class="btn btn-primary">${it ? '저장' : '추가'}</button>
+    </div></form>`;
+  const sync = (changed) => {
+    const ex = $('ri-ex').value;
+    $('ri-target-l').textContent = isHold(ex) ? '목표 시간(초)' : '목표 횟수';
+    $('ri-w-field').hidden = PLAN_META[ex]?.eq === 'body';
+    if (changed) { // 운동을 바꾸면 그 운동의 기본값으로
+      const def = defaultItem(ex, store.routinePrefs().level, store.lastWeight(ex));
+      $('ri-target').value = isHold(ex) ? def.holdSec : def.reps;
+      $('ri-rest').value = def.rest;
+      $('ri-w').value = def.weight ?? '';
+    }
+  };
+  sync(false);
+  $('ri-ex').onchange = () => sync(true);
+  dlg.querySelectorAll('[data-st]').forEach((b) => {
+    b.onclick = () => { const inp = $(b.dataset.st); inp.value = Math.max(0, Number(inp.value || 0) + Number(b.dataset.d)); };
+  });
+  if (it) {
+    $('ri-del').onclick = () => {
+      d.items.splice(idx, 1);
+      store.setRoutineDraft({ ...d, edited: true });
+      dlg.close('deleted');
+      renderRoutine();
+    };
+  }
+  dlg.onclose = () => {
+    if (dlg.returnValue !== 'ok') return;
+    const ex = $('ri-ex').value;
+    const target = Math.max(1, Math.round(Number($('ri-target').value || 0)));
+    const next = {
+      exercise: ex,
+      sets: Math.min(20, Math.max(1, Math.round(Number($('ri-sets').value || 1)))),
+      rest: Math.min(600, Math.max(0, Math.round(Number($('ri-rest').value || 0)))),
+    };
+    if (isHold(ex)) next.holdSec = target; else next.reps = target;
+    const w = $('ri-w').value;
+    if (w !== '' && PLAN_META[ex]?.eq !== 'body') { next.weight = Number(w); store.rememberWeight(ex, Number(w)); }
+    if (it) d.items[idx] = next; else d.items.push(next);
+    store.setRoutineDraft({ ...d, edited: true });
+    renderRoutine();
+  };
+  dlg.showModal();
+}
+
+export function promptDialog(title, label, value = '') {
+  return new Promise((resolve) => {
+    const d = $('dialog');
+    d.innerHTML = `<form method="dialog"><h3>${esc(title)}</h3>
+      <div class="field"><label for="pd-v">${esc(label)}</label><input type="text" id="pd-v" value="${esc(value)}" maxlength="30"></div>
+      <div class="btn-row"><button value="cancel" class="btn btn-ghost">취소</button><button value="ok" class="btn btn-primary">확인</button></div></form>`;
+    d.onclose = () => resolve(d.returnValue === 'ok' ? $('pd-v').value.trim() : null);
+    d.showModal();
+  });
+}
+
+$('btn-start-routine').addEventListener('click', () => {
+  const d = store.routineDraft();
+  if (!d?.items?.length) return;
+  workout.start({ plan: { name: d.name || '오늘 루틴', items: d.items } });
+});
 $('btn-start-picked').addEventListener('click', () => {
   const ids = [...picked];
   store.setLastPick(ids);
@@ -157,6 +362,13 @@ function renderSummary() {
       <div class="card stat"><div class="num">${tot.sets}</div><div class="lbl">세트</div></div>
       <div class="card stat"><div class="num">${by.size}</div><div class="lbl">종목</div></div>
     </div>`;
+  if (s.planProgress) {
+    const pp = s.planProgress;
+    const pct = Math.round((100 * pp.setsDone) / Math.max(1, pp.setsTotal));
+    html += `<div class="card plan-card"><div class="plan-card-top"><b>📋 ${esc(s.plan?.name || '오늘 루틴')}</b><span>${pct}%</span></div>
+      <div class="wo-plan-bar plan-bar"><i style="width:${pct}%"></i></div>
+      <div class="muted small">세트 ${pp.setsDone}/${pp.setsTotal}${pp.repsTarget ? ` · 반복 ${pp.repsDone}/${pp.repsTarget}회` : ''}</div></div>`;
+  }
   const tips = [];
   for (const [ex, sets] of by) {
     const reps = sets.filter((x) => x.kind === 'reps');
@@ -171,7 +383,7 @@ function renderSummary() {
         ? (bad ? `<span class="q warn">자세 지적 ${bad}회</span>` : '<span class="q">좋은 자세 ✓</span>')
         : '<span class="q"></span>';
       html += `<div class="set-row"><div class="set-no">${i + 1}</div>
-        <div class="set-main"><div class="v">${setValue(set)}${set.weight ? ` <span class="muted" style="font-size:14px">× ${set.weight}kg</span>` : ''}</div>${q}${tempoRow(set)}</div>
+        <div class="set-main"><div class="v">${setValue(set)}${set.plan ? ` <span class="muted plan-tgt">/ 목표 ${set.plan.target}${set.kind === 'hold' ? '초' : '회'}${(set.kind === 'hold' ? set.holdSec : set.reps) >= set.plan.target ? ' ✓' : ''}${set.plan.manual ? ' · 직접 완료' : ''}</span>` : ''}${set.weight ? ` <span class="muted" style="font-size:14px">× ${set.weight}kg</span>` : ''}</div>${q}${tempoRow(set)}</div>
         <div class="set-edit"><button class="mini-btn" data-edit-set="${esc(set.id)}">수정</button></div></div>`;
       for (const [code, n] of Object.entries(set.issues || {})) {
         const info = formInfo(ex, code);
@@ -530,6 +742,7 @@ function applyTheme() {
 /* ---------- 시작 ---------- */
 const render = {
   home: renderHome,
+  routine: renderRoutine,
   history: () => renderHistory($('history-body')),
   settings: renderSettings,
 };

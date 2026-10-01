@@ -432,6 +432,7 @@ export class Tracker {
       pending: this._pending(),
       // 반복 세트 중 '몇 초 더 멈추면 세트 끝'인지 (화면 안내용)
       setEndIn: s?.kind === 'reps' && !this._midRep() ? Math.max(0, this._idleSec() - (this.t - s.lastRepT)) : null,
+      midRep: s?.kind === 'reps' ? !!this._midRep() : false,
       idleSec: s?.kind === 'reps' ? this._idleSec() : null,
       tempo: s?.kind === 'reps' ? s.reps.map((r) => r.tempo ?? null) : null,
     };

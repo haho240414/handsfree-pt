@@ -116,6 +116,25 @@ if (cam?.running) {
   back = await stage('운동 중 뒤로가기', `({ stillInWorkout: !document.getElementById('screen-workout').hidden, toast: document.getElementById('toast').innerText })`);
   shot('4_after_back');
   await stage('종료', `(window.__hfpt.workout.end(), window.__hfpt.store.setSetting('gpu', true), true)`);
+  // 참고 단계: 오늘의 루틴(PT 모드) — 루틴 짜기 화면 → 진행 화면에 지금 운동·목표가 나오는지
+  await stage('오늘의 루틴', `(async () => {
+    const w = (ms) => new Promise((r) => setTimeout(r, ms));
+    window.__hfpt.store.setSetting('gpu', false);
+    document.querySelector('[data-go=home]').click(); await w(300);
+    document.getElementById('btn-open-routine').click(); await w(500);
+    const items = document.querySelectorAll('.r-item').length;
+    document.getElementById('btn-start-routine').click();
+    let s;
+    for (let i = 0; i < 12; i++) {
+      await w(2000);
+      s = { items, plan: document.getElementById('wo-plan-step').innerText, sets: document.getElementById('wo-plan-sets').innerText,
+        exercise: document.getElementById('wo-exercise').innerText, count: document.getElementById('wo-count').innerText,
+        target: document.getElementById('wo-target').innerText, next: document.getElementById('wo-next-text').innerText };
+      if (s.target) break;
+    }
+    window.__hfpt.workout.end(); window.__hfpt.store.setSetting('gpu', true);
+    return s;
+  })()`, 60000);
 }
 
 const required = app?.native === true && app?.plugins?.includes('TextToSpeech')

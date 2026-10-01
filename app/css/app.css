@@ -402,3 +402,50 @@ dialog h3 { margin: 0 0 10px; }
 .field label { font-size: 13px; color: var(--text-2); }
 .stepper { display: flex; align-items: center; gap: 8px; }
 .stepper input { width: 90px; text-align: center; font-size: 20px; font-weight: 800; }
+
+/* 오늘의 루틴 (PT 모드) */
+.btn-routine .btn-title { display: inline-flex; align-items: center; gap: 8px; }
+.pt-badge { font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); }
+.routine-make { display: flex; flex-direction: column; gap: 10px; }
+.rm-title { font-weight: 800; }
+.rm-row { display: flex; flex-direction: column; gap: 6px; }
+.rm-row > span { font-size: 12px; color: var(--text-2); font-weight: 600; }
+.rm-row .seg { display: flex; flex-wrap: wrap; }
+.rm-row .seg button { flex: 1; white-space: nowrap; padding: 7px 4px; }
+.routine-head { display: flex; justify-content: space-between; align-items: center; margin: 18px 2px 6px; }
+.routine-reason { margin: 0 2px 8px; }
+.routine-list { padding-top: 4px; padding-bottom: 8px; }
+.r-item, .r-saved { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.r-item:first-child, .r-saved:first-child { border-top: 0; }
+.r-no { width: 26px; height: 26px; flex: none; border-radius: 8px; background: var(--surface-2); display: grid; place-items: center; font-weight: 800; font-size: 13px; }
+.r-main { flex: 1; min-width: 0; }
+.r-name { font-weight: 700; }
+.r-sub { font-size: 13px; color: var(--text-2); }
+.r-ctl { display: flex; gap: 4px; flex: none; }
+.r-ctl .mini-btn { min-width: 34px; padding: 0 8px; }
+.r-saved { justify-content: space-between; }
+.routine-list .btn-ghost { width: 100%; margin-top: 6px; }
+
+/* 운동 화면 · PT 진행 */
+.wo-plan {
+  position: absolute; left: 14px; right: 14px; top: calc(62px + var(--safe-t)); z-index: 2;
+  padding: 8px 12px; border-radius: 12px; background: rgba(0, 0, 0, .45); backdrop-filter: blur(6px);
+}
+.wo-plan-top { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; font-weight: 700; }
+.wo-plan-bar { height: 5px; margin-top: 6px; border-radius: 99px; background: rgba(255, 255, 255, .2); overflow: hidden; }
+.wo-plan-bar i { display: block; height: 100%; width: 0; background: var(--wo-accent); transition: width .4s; }
+.wo-count-row { display: flex; align-items: baseline; justify-content: center; gap: 6px; }
+.wo-target { font-size: clamp(34px, 11vw, 80px); font-weight: 900; color: rgba(255, 255, 255, .7); font-variant-numeric: tabular-nums; }
+.wo-next { margin-bottom: 10px; padding: 8px 12px 10px; border-radius: 14px; background: rgba(0, 0, 0, .45); backdrop-filter: blur(6px); }
+.wo-next-text { font-size: clamp(15px, 4.2vw, 22px); font-weight: 700; }
+.wo-next-text b { color: var(--wo-accent); }
+.wo-next-actions { display: flex; gap: 8px; margin-top: 8px; }
+.wo-next-actions .wo-btn { flex: 1; height: 42px; }
+.wo-count.done { color: #fff; }
+
+.plan-card { margin-bottom: 12px; }
+.plan-card-top { display: flex; justify-content: space-between; align-items: baseline; }
+.plan-card-top span { font-weight: 900; font-size: 20px; color: var(--accent-text); }
+.plan-bar { position: static; margin: 8px 0 6px; background: var(--surface-2); height: 8px; }
+.plan-bar i { background: var(--accent); }
+.plan-tgt { font-size: 14px; font-weight: 600; }
