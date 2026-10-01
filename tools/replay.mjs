@@ -51,7 +51,12 @@ console.log(`폰: ${m.ua ?? '?'}`);
 console.log(`설정: 모델 ${m.settings?.model} · ${m.delegate ?? '?'} · 확정 ${m.settings?.lockReps}회 · 모드 ${m.mode}${m.candidates ? ` (${m.candidates.map(name).join(', ')})` : ''} · 앱 fps ${m.fps ?? '?'} · 기울기 ${m.tilt ?? '-'}°`);
 if (doc.note) console.log(`사용자 메모: ${doc.note}`);
 console.log('\n앱이 기록한 세트:');
-for (const s of doc.sets || []) console.log(`  ${name(s.exercise)} ${s.kind === 'hold' ? `${s.holdSec}초` : `${s.reps}회`}  (${s.startT}~${s.endT}초)`);
+const rel = (s, k) => s[`${k}T`] ?? (m.wallT0 && s[k] ? ((s[k] - m.wallT0) / 1000).toFixed(1) : '?');
+for (const s of doc.sets || []) {
+  const plan = s.plan ? ` · 목표 ${s.plan.target}${s.plan.manual ? '(직접 완료)' : ''}` : '';
+  const fix = s.origReps != null ? ` · 앱이 센 값 ${s.origReps}회 → 사용자가 고침` : '';
+  console.log(`  ${name(s.exercise)} ${s.kind === 'hold' ? `${s.holdSec}초` : `${s.reps}회`}  (${rel(s, 'start')}~${rel(s, 'end')}초)${plan}${fix}`);
+}
 
 // 재현: 같은 설정 + 같은 시점의 기울기 보정
 const tilts = (doc.events || []).filter((e) => e[1] === 'tilt');

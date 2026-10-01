@@ -11,6 +11,8 @@ export const DEFAULT_SETTINGS = {
   setEndSec: 0,         // 반복이 멈추고 이 초가 지나면 세트 끝, 0 = 자동(평소 반복 간격의 2.2배, 3.5~12초)
   model: 'full',        // full(정확) | lite(빠름)
   gpu: true,            // GPU 가속 (끄면 CPU 호환 모드)
+  analysisFps: 15,      // 초당 분석 장수: 15(절전, 기본 — 인식 기준을 맞춘 영상도 초당 15장) / 30(빠른 동작용)
+  handGesture: true,    // 쉬는 동안 두 손을 머리 위로 2초 = 휴식 끝
   lockReps: 2,          // 자동 인식 확정에 필요한 반복 수
   mirror: true,         // 화면 좌우 반전(거울처럼, 전면 카메라일 때만)
   cameraId: '',         // 고른 카메라(deviceId), '' = 전면 기본

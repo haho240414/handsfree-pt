@@ -23,24 +23,22 @@
     </header>
     <p class="today-label" id="today-label"></p>
     <div class="card today-card" id="today-card"></div>
-    <button class="btn btn-primary btn-xl" id="btn-start-auto">
-      <span class="btn-title">운동 시작</span>
-      <span class="btn-sub">운동 종류를 자동으로 알아봐요</span>
-    </button>
-    <button class="btn btn-secondary btn-lg btn-routine" id="btn-open-routine">
-      <span class="btn-title">오늘의 루틴 <span class="pt-badge">PT 모드</span></span>
-      <span class="btn-sub" id="routine-sub">루틴을 짜 주고, 지금 할 운동·횟수를 안내해요</span>
-    </button>
-    <button class="btn btn-secondary btn-lg" id="btn-start-pick">
-      <span class="btn-title">운동 골라서 시작</span>
-      <span class="btn-sub">헬스장 루틴 · 무게 기록</span>
-    </button>
+    <div class="start-grid">
+      <button class="btn btn-primary btn-xl" id="btn-start-auto">
+        <span class="btn-title">자유 운동</span>
+        <span class="btn-sub">하고 싶은 운동을 그냥 하면 알아서 알아보고 세요</span>
+      </button>
+      <button class="btn btn-secondary btn-xl btn-routine" id="btn-open-routine">
+        <span class="btn-title">오늘의 루틴 <span class="pt-badge">PT</span></span>
+        <span class="btn-sub" id="routine-sub">루틴을 짜 주고, 할 운동·횟수를 안내해요</span>
+      </button>
+    </div>
     <div class="howto card">
       <div class="howto-title">이렇게 쓰세요</div>
       <ol>
-        <li>폰을 바닥·선반에 세우고 <b>2~3m 뒤로</b> 가서 전신이 나오게</li>
-        <li>운동을 시작하면 <b>“스쿼트, 둘”</b>처럼 알아서 세요</li>
-        <li>멈추면 세트가 끝나고 <b>휴식 타이머</b>가 돌아요</li>
+        <li>폰을 바닥·선반에 세우고 <b>2~3m 뒤로</b> — 화면 테두리가 <b>초록</b>이 되면 자리 완료</li>
+        <li><b>자유 운동</b>: 아무 운동이나 하면 “스쿼트, 둘”처럼 알아서 세요</li>
+        <li><b>오늘의 루틴</b>: 할 운동·목표 횟수를 화면과 음성으로 안내하고, 목표를 채우면 휴식 → 다음 세트</li>
       </ol>
       <p class="muted small">무음 모드를 끄고 소리를 켜 두세요. 영상은 폰 밖으로 나가지 않아요.</p>
     </div>
@@ -70,6 +68,9 @@
       <span></span>
     </header>
     <div id="routine-body"></div>
+    <button class="link-card" id="btn-start-pick" type="button">
+      <span><b>목표 없이 운동만 골라서 하기</b><br><span class="muted small">고른 운동 안에서만 자동 인식 · 헬스장 자유 운동</span></span><span aria-hidden="true">›</span>
+    </button>
     <div class="sticky-bottom">
       <button class="btn btn-primary btn-lg" id="btn-start-routine" disabled>루틴을 짜 주세요</button>
     </div>
@@ -79,6 +80,7 @@
   <section id="screen-workout" class="screen workout" hidden>
     <video id="cam" playsinline muted autoplay></video>
     <canvas id="skeleton"></canvas>
+    <div class="wo-frame" id="wo-frame" hidden></div>
     <div class="wo-top">
       <div class="wo-status"><span class="dot" id="wo-dot"></span><span id="wo-status-text">준비 중</span></div>
       <div class="wo-clock" id="wo-clock">0:00</div>

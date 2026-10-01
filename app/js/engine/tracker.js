@@ -433,6 +433,8 @@ export class Tracker {
       // 반복 세트 중 '몇 초 더 멈추면 세트 끝'인지 (화면 안내용)
       setEndIn: s?.kind === 'reps' && !this._midRep() ? Math.max(0, this._idleSec() - (this.t - s.lastRepT)) : null,
       midRep: s?.kind === 'reps' ? !!this._midRep() : false,
+      repGap: s?.kind === 'reps' && s.reps.length > 1
+        ? median(s.reps.slice(1).map((r, i) => r.tEnd - s.reps[i].tEnd)) : null, // 평소 반복 간격(초)
       idleSec: s?.kind === 'reps' ? this._idleSec() : null,
       tempo: s?.kind === 'reps' ? s.reps.map((r) => r.tempo ?? null) : null,
     };

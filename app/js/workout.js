@@ -46,7 +46,7 @@ export class Workout {
       sets: $('wo-sets'), debug: $('wo-debug'), loading: $('wo-loading'), loadingText: $('wo-loading-text'),
       voiceBtn: $('btn-voice'), endBtn: $('btn-end'),
       tempo: $('wo-tempo'), tempoText: $('wo-tempo-text'), tempoCanvas: $('wo-tempo-canvas'), bottom: $('wo-bottom'),
-      restActions: $('wo-rest-actions'),
+      restActions: $('wo-rest-actions'), frame: $('wo-frame'),
       plan: $('wo-plan'), planStep: $('wo-plan-step'), planSets: $('wo-plan-sets'), planFill: $('wo-plan-fill'),
       target: $('wo-target'), next: $('wo-next'), nextText: $('wo-next-text'), planDoneBtn: $('btn-plan-done'),
     };
@@ -122,6 +122,9 @@ export class Workout {
     this.restUntil = 0;
     this.greeted = false;
     this.lastTs = 0;
+    this.lastInferAt = 0;
+    this.lastLm = null;
+    this.inferEvery = 1000 / Math.max(5, Number(st.analysisFps) || 15);
     this.frames = 0;
     this.fps = 0;
     this.fpsT = performance.now();
@@ -132,6 +135,8 @@ export class Workout {
     this.frameSaid = {};     // 구도 안내를 말한 횟수 (같은 말은 두 번까지)
     this.lastFrameSay = -Infinity;
     this.lastTempo = null;   // 쉬는 동안 보여줄 직전 세트 템포
+    this.frameOkAt = null;   // 자리 잡기 확인한 시각
+    this.frameGoodSince = null;
     this.prevLogs = [];
     if (!source) {
       this.diag.start({
@@ -298,7 +303,11 @@ export class Workout {
     pt.reminded = false;
     if (final) return;
     if (res.finished) { this._ptFinish(); return; }
-    if (res.exerciseDone) this.tracker = this._makeTracker(this.plan.item.exercise);
+    if (res.exerciseDone) {
+      this.tracker = this._makeTracker(this.plan.item.exercise);
+      this.frameOkAt = null; // 운동이 바뀌면 카메라 자리를 다시 확인
+      this.frameGoodSince = null;
+    }
     // 음성: 이번 세트 결과 + 휴식 + 다음
     const nx = this.plan.item;
     const what = isHold(item.exercise) ? `${Math.round(done)}초` : `${done}회`;
@@ -336,6 +345,8 @@ export class Workout {
     this.restUntil = 0;
     if (this.plan.finished) { this._ptFinish(); return; }
     this.tracker = this._makeTracker(this.plan.item.exercise);
+    this.frameOkAt = null;
+    this.frameGoodSince = null;
     this.pt.stage = 'work';
     this.pt.accum = 0;
     this.pt.recs = [];
@@ -429,11 +440,22 @@ export class Workout {
 
   // 공식 MediaPipe 예제와 같은 방식: 매 화면 갱신(rAF)마다 새 영상 프레임이 왔는지 확인해 처리.
   // (requestVideoFrameCallback 은 영상이 다른 요소에 가려지면 크롬이 거의 안 불러줘서 쓰지 않는다 — 실측 0~1fps)
+  // 배터리·발열: AI 분석은 초당 analysisFps 장만(기본 15 — 인식 기준을 맞춘 영상도 초당 15장이라 정확도는 같다).
+  // 화면은 새 카메라 프레임마다 그리되 뼈대는 마지막 분석 결과를 쓴다(미리보기는 부드럽게).
   _schedule() {
     this.raf = requestAnimationFrame(() => {
       if (!this.running) return;
       const v = this.el.video;
-      if (v.currentTime !== this.lastVT) this._process(v.currentTime);
+      if (v.currentTime !== this.lastVT) {
+        const now = performance.now();
+        if (now - this.lastInferAt >= this.inferEvery - 4) {
+          this.lastInferAt = now;
+          this._process(v.currentTime);
+        } else {
+          this.lastVT = v.currentTime;
+          this._draw(this.lastLm);
+        }
+      }
       this._schedule();
     });
   }
@@ -489,6 +511,7 @@ export class Workout {
       this.frames = 0;
       this.fpsT = now;
     }
+    this.lastLm = lm;
     this._draw(lm);
     for (const e of events) this._onEvent(e);
     this._hud();
@@ -504,11 +527,7 @@ export class Workout {
     const name = exName(e.exercise);
     const cueText = this.cfg.cues && e.cue ? e.cue.text : '';
     switch (e.type) {
-      case 'personFound':
-        if (!this.greeted && !this.isFile) {
-          this.greeted = true;
-          this.voice.say('인식됐어요. 운동을 시작하세요.', { interrupt: true });
-        }
+      case 'personFound': // 인사는 자리 잡기 확인('좋아요. 이 자리에서 시작하세요')이 맡는다
         break;
       case 'setStart':
         this.restUntil = 0;
@@ -641,6 +660,7 @@ export class Workout {
     this.el.dot.className = `dot ${dot}`;
     this._setText('status', status);
     if (!active) this._sayFraming(frame, now);
+    this._frameCheck(snap, frame, now);
     if (this.plan) {
       this._hudPT(snap, message, now);
       this._drawTempo(snap);
@@ -657,7 +677,9 @@ export class Workout {
       count.classList.remove('rest', 'tentative');
       // 멈춘 지 1.5초가 넘으면 '몇 초 더 멈추면 이 세트를 기록'하는지 보여준다 (설정 → 세트 끝 판정)
       const left = snap.setEndIn;
-      const hint = left != null && snap.idleSec - left > 1.5 && left > 0 ? `${Math.ceil(left)}초 더 쉬면 세트 기록` : '';
+      // 평소 반복 간격보다 오래 멈췄을 때만 (느린 운동은 반복 사이에도 2~3초 쉰다)
+      const quietFor = snap.idleSec - (left ?? 0);
+      const hint = left != null && left > 0 && quietFor > Math.max(1.5, 1.3 * (snap.repGap || 0)) ? `${Math.ceil(left)}초 더 쉬면 세트 기록` : '';
       this._setText('message', snap.present ? hint : message);
     } else if (snap.pending) {
       // 자동 인식: 1회째는 아직 확정 전 — 알아챘다는 걸 바로 보여준다
@@ -743,6 +765,25 @@ export class Workout {
     this._setText('message', msg);
     const html = nx ? `다음: <b>${esc(nxText)}</b>` : '<b>마지막 세트예요!</b>';
     if (this.el.nextText.innerHTML !== html) this.el.nextText.innerHTML = html;
+  }
+
+  // 자리 잡기: 첫 세트 전(루틴은 운동이 바뀔 때마다) 화면 테두리 색으로 구도를 알려준다.
+  // 주황 = 몸이 덜 보임(이유는 화면·음성 안내), 1.5초 동안 잘 보이면 초록 + "좋아요" 한 번, 2.5초 뒤 사라짐
+  _frameCheck(snap, frame, now) {
+    const el = this.el.frame;
+    const busy = snap.state !== 'search' || (this.plan && this.pt?.stage === 'work' && this._ptCount(snap) > 0);
+    if (this.isFile || busy || (this.frameOkAt && now - this.frameOkAt > 2500)) { el.hidden = true; return; }
+    el.hidden = false;
+    if (this.frameOkAt) { el.className = 'wo-frame ok'; return; }
+    const good = snap.present && (!frame || frame.code === 'feet');
+    if (good) {
+      this.frameGoodSince ??= now;
+      if (now - this.frameGoodSince > 1500) {
+        this.frameOkAt = now;
+        this.voice.say(this.restUntil ? '자리 좋아요.' : '좋아요. 이 자리에서 시작하세요.');
+      }
+    } else this.frameGoodSince = null;
+    el.className = `wo-frame ${good ? 'ok' : 'bad'}`;
   }
 
   // 화면 구도: 안 보이는 부위에 따라 어떻게 하면 되는지. speak = 소리로도 알려줄 만큼 중요한지
@@ -888,7 +929,8 @@ export class Workout {
 
   // 아래쪽(템포 패널·세트 칩)이 커지면 큰 숫자를 그만큼 위로 올려 겹치지 않게
   _liftCenter() {
-    const h = this.el.bottom.offsetHeight;
+    // 가로 화면에선 아래쪽 안내가 오른쪽 기둥으로 가므로 들어올릴 필요가 없다
+    const h = matchMedia('(orientation: landscape)').matches ? 0 : this.el.bottom.offsetHeight;
     if (h !== this.lift) {
       this.lift = h;
       this.el.screen.style.setProperty('--wo-lift', `${h}px`);
@@ -917,7 +959,7 @@ export class Workout {
       note,
       sets: this.lastSession?.sets || this.tracker?.sets || [],
       log: [...(this.prevLogs || []), ...(this.tracker?.log || [])].slice(-1500),
-      extra: { fps: this.fps, delegate: this.landmarker?.delegate ?? null, tilt: this.lastTiltDeg ?? null },
+      extra: { fps: this.fps, delegate: this.landmarker?.delegate ?? null, tilt: this.lastTiltDeg ?? null, wallT0: this.wallT0 ?? null },
     });
   }
 

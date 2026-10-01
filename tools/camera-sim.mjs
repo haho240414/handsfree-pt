@@ -21,6 +21,7 @@ const opt = (k, d) => (argv.includes(k) ? argv[argv.indexOf(k) + 1] : d);
 const clip = argv.find((a, i) => !a.startsWith('--') && !argv[i - 1]?.startsWith('--')) || 'squat_mensgarage';
 const shots = opt('--shots', null);
 const tilt = opt('--tilt', null);
+const landscape = argv.includes('--landscape');
 const after = Number(opt('--after', 4));
 const planArg = opt('--plan', null);
 const plan = planArg && {
@@ -53,7 +54,9 @@ try {
   const page = await browser.newPage();
   page.on('pageerror', (e) => { console.error('[페이지 오류]', e.message); code = 1; });
   page.on('console', (m) => { if (m.type() === 'error') console.error('[콘솔 오류]', m.text()); });
-  await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  await page.setViewport(landscape
+    ? { width: 844, height: 390, deviceScaleFactor: 2, isMobile: true, hasTouch: true, isLandscape: true }
+    : { width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   await page.evaluateOnNewDocument((src, tiltDeg) => {
     navigator.mediaDevices.getUserMedia = async () => {
       const v = document.createElement('video');
@@ -78,7 +81,7 @@ try {
     window.__said = [];
     const voice = window.__hfpt.workout.voice;
     const t0 = performance.now();
-    for (const fn of ['say', 'count']) {
+    for (const fn of ['say', 'count', 'beep']) {
       const orig = voice[fn].bind(voice);
       voice[fn] = (...args) => { window.__said.push([((performance.now() - t0) / 1000).toFixed(1), fn, String(args[0]), args[1] && typeof args[1] === 'string' ? args[1] : '']); return orig(...args); };
     }
@@ -97,6 +100,7 @@ try {
       tempo: $('wo-tempo').hidden ? '' : $('wo-tempo-text').innerText.replace(/\s+/g, ' '),
       cue: $('wo-cue').hidden ? '' : $('wo-cue').innerText,
       restBtns: !$('wo-rest-actions').hidden,
+      frame: $('wo-frame').hidden ? '' : $('wo-frame').className.replace('wo-frame', '').trim(),
       target: $('wo-target').hidden ? '' : $('wo-target').innerText,
       plan: $('wo-plan').hidden ? '' : `${$('wo-plan-step').innerText} | ${$('wo-plan-sets').innerText}`,
       next: $('wo-next').hidden ? '' : $('wo-next-text').innerText,
@@ -110,7 +114,7 @@ try {
     const key = JSON.stringify({ ...s, t: 0, ended: 0, status: s.status.replace(/\d+fps/, '') });
     if (key !== prev) {
       prev = key;
-      console.log(`${String(s.t).padStart(5)}s  ${s.status.padEnd(14)} | ${(s.ex + (s.tentative ? '(후보)' : '')).padEnd(14)} ${(s.count + s.target).padStart(5)} | ${s.msg}${s.plan ? ` | 진행: ${s.plan} | ${s.next}` : ''}${s.tempo && !plan ? ` | 템포: ${s.tempo}` : ''}${s.cue ? ` | 교정: ${s.cue}` : ''}${s.restBtns ? ' | [+30초][휴식 끝내기]' : ''}`);
+      console.log(`${String(s.t).padStart(5)}s  ${s.status.padEnd(14)} | ${(s.ex + (s.tentative ? '(후보)' : '')).padEnd(14)} ${(s.count + s.target).padStart(5)} | ${s.msg}${s.plan ? ` | 진행: ${s.plan} | ${s.next}` : ''}${s.tempo && !plan ? ` | 템포: ${s.tempo}` : ''}${s.cue ? ` | 교정: ${s.cue}` : ''}${s.restBtns ? ' | [+30초][휴식 끝내기]' : ''}${s.frame ? ` | 테두리:${s.frame}` : ''}`);
       // 휴식 버튼 시험: 처음 보이면 +30초를 한 번 눌러 본다
       if (s.restBtns && !pressedPlus && !plan) {
         pressedPlus = true;
@@ -131,7 +135,7 @@ try {
   if (shots) await page.screenshot({ path: path.join(shots, `${clip}-rest.png`) });
   const said = await page.evaluate(() => window.__said);
   console.log('\n앱이 말한 내용(시작 기준 초):');
-  for (const [t, fn, text, cue] of said) console.log(`  ${t.padStart(5)}s ${fn === 'count' ? '카운트' : '음성'}: ${text}${cue ? ` (${cue})` : ''}`);
+  for (const [t, fn, text, cue] of said) console.log(`  ${t.padStart(5)}s ${fn === 'count' ? '카운트' : fn === 'beep' ? '삐' : '음성'}: ${fn === 'beep' ? `${text}Hz` : text}${cue ? ` (${cue})` : ''}`);
   // 루틴을 끝까지 하면 앱이 스스로 요약 화면으로 넘어간다
   if (await page.evaluate(() => !document.getElementById('screen-workout').hidden)) await page.click('#btn-end');
   await new Promise((r) => setTimeout(r, 800));

@@ -77,14 +77,20 @@ export class Voice {
     speechSynthesis.speak(u);
   }
 
-  /** 횟수 읽기. 반복이 빠르면(0.8초 이내) 말 대신 삐 소리, 5의 배수만 말한다 */
+  /**
+   * 횟수 읽기. 점핑잭·하이니처럼 빠른 운동(최근 반복 간격 중앙값 1초 미만)은 숫자를 다 말하면 소리가 밀리고 끊긴다
+   * → 매회 짧은 삐 소리, 5의 배수와 꼭 해야 할 말(자세 지적·남은 횟수)만 말로.
+   */
   count(n, extra = '') {
     const now = performance.now();
-    const fast = now - this.lastCountAt < 800;
+    if (n <= 1 || now - this.lastCountAt > 4000) this.gaps = [];
+    else this.gaps = [...(this.gaps || []), now - this.lastCountAt].slice(-3);
     this.lastCountAt = now;
+    const g = [...(this.gaps || [])].sort((a, b) => a - b);
+    const fast = g.length >= 2 && g[g.length >> 1] < 1000;
     const word = this.style === 'native' ? nativeKorean(n) : String(n);
     if (fast && !extra && n % 5 !== 0) {
-      this.beep(880, 0.07);
+      this.beep(n % 5 === 4 ? 990 : 880, 0.06);
       return;
     }
     this.say(extra ? `${word}. ${extra}` : word, { interrupt: true });
