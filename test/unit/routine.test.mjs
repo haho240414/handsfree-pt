@@ -41,7 +41,8 @@ test('강도: 입문 2세트 → 강하게 4세트, 버티기 운동은 초로',
   assert.equal(defaultItem('plank', 1).reps, undefined);
   assert.ok(isHold('wallsit') && !isHold('squat'));
   assert.equal(defaultItem('curl', 1, 8).weight, 8);
-  assert.equal(defaultItem('pushup', 1, 8).weight, undefined, '맨몸 운동엔 무게 안 붙임');
+  assert.equal(defaultItem('pushup', 1, null).weight, undefined, '무게 기록이 없으면 무게 안 붙임');
+  assert.equal(defaultItem('squat', 1, 20).weight, 20, '맨몸 운동도 무게를 적었으면 이어서');
 });
 
 test('오늘 부위 추천: 어제 하체 → 상체, 기록 없으면 전신', () => {
@@ -104,4 +105,25 @@ test('루틴 진행: 0회로 끝낸 세트는 완료로 세지 않고, 직접 �
   assert.equal(p.setsDone, 2);
   assert.equal(p.setsLogged, 3);
   assert.equal(p.repsDone, 7, '직접 완료 세트는 횟수(0)만큼만');
+});
+
+import { progressItem, weightStep } from '../../app/js/routine.js';
+
+test('점진적 과부하: 목표를 다 채웠으면 무게(맨몸은 횟수)를 올리고, 많이 못 했으면 그대로·줄인다', () => {
+  const ses = (ex, sets) => ({ start: 1, sets: sets.map(([reps, target, weight]) => ({ exercise: ex, kind: 'reps', reps, weight, plan: { target } })) });
+  const up = progressItem({ exercise: 'squat', sets: 3, reps: 12, rest: 90 }, [ses('squat', [[12, 12, 40], [12, 12, 40], [13, 12, 40]])]);
+  assert.equal(up.weight, 45);
+  assert.match(up.why, /\+5kg/);
+  const curl = progressItem({ exercise: 'curl', sets: 3, reps: 12, rest: 60 }, [ses('curl', [[12, 12, 8], [12, 12, 8]])]);
+  assert.equal(curl.weight, 9);
+  const body = progressItem({ exercise: 'pushup', sets: 3, reps: 10, rest: 90 }, [ses('pushup', [[10, 10], [10, 10], [11, 10]])]);
+  assert.equal(body.reps, 12);
+  const hard = progressItem({ exercise: 'pushup', sets: 3, reps: 10, rest: 90 }, [ses('pushup', [[6, 10], [5, 10], [9, 10]])]);
+  assert.equal(hard.reps, 8);
+  const same = progressItem({ exercise: 'squat', sets: 3, reps: 12, rest: 90 }, [ses('squat', [[12, 12, 40], [10, 12, 40]])]);
+  assert.equal(same.weight, 40);
+  assert.equal(progressItem({ exercise: 'squat', sets: 3, reps: 12 }, []), null, '기록 없으면 그대로');
+  assert.equal(weightStep('lateral', 6), 1);
+  const plank = progressItem({ exercise: 'plank', sets: 2, holdSec: 30 }, [{ start: 1, sets: [{ exercise: 'plank', kind: 'hold', holdSec: 31, plan: { target: 30 } }, { exercise: 'plank', kind: 'hold', holdSec: 30, plan: { target: 30 } }] }]);
+  assert.equal(plank.holdSec, 35);
 });

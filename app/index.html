@@ -102,10 +102,14 @@
         <button class="wo-btn" id="btn-rest-plus" type="button">+30초</button>
         <button class="wo-btn" id="btn-rest-skip" type="button">휴식 끝내기</button>
       </div>
+      <div class="wo-adjust" id="wo-adjust" hidden>
+        <div class="adj" id="adj-w"><button class="wo-btn" type="button" data-adj="w" data-d="-1" aria-label="무게 줄이기">−</button><span id="adj-w-val"></span><button class="wo-btn" type="button" data-adj="w" data-d="1" aria-label="무게 늘리기">+</button></div>
+        <div class="adj" id="adj-r"><button class="wo-btn" type="button" data-adj="r" data-d="-1" aria-label="목표 줄이기">−</button><span id="adj-r-val"></span><button class="wo-btn" type="button" data-adj="r" data-d="1" aria-label="목표 늘리기">+</button></div>
+      </div>
     </div>
     <div class="wo-bottom" id="wo-bottom">
       <div class="wo-next" id="wo-next" hidden>
-        <div class="wo-next-text" id="wo-next-text"></div>
+        <div class="wo-next-row"><canvas class="wo-demo" id="wo-demo" hidden aria-hidden="true"></canvas><div class="wo-next-text" id="wo-next-text"></div></div>
         <div class="wo-next-actions">
           <button class="wo-btn" id="btn-plan-done" type="button">세트 완료</button>
           <button class="wo-btn" id="btn-plan-skip" type="button">다음 운동 ▸</button>

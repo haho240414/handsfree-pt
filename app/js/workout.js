@@ -8,7 +8,8 @@ import { Voice, nativeKorean } from './voice.js';
 import { TiltSensor } from './tilt.js';
 import { DiagRecorder } from './diag.js';
 import { openCamera, widenCamera } from './camera.js';
-import { PlanRunner, isHold, PLAN_META } from './routine.js';
+import { PlanRunner, isHold, PLAN_META, weightStep } from './routine.js';
+import { loadDemos, playDemo, hasDemo } from './demo.js';
 import * as store from './store.js';
 import { esc } from './format.js';
 
@@ -47,12 +48,18 @@ export class Workout {
       voiceBtn: $('btn-voice'), endBtn: $('btn-end'),
       tempo: $('wo-tempo'), tempoText: $('wo-tempo-text'), tempoCanvas: $('wo-tempo-canvas'), bottom: $('wo-bottom'),
       restActions: $('wo-rest-actions'), frame: $('wo-frame'),
+      adjust: $('wo-adjust'), adjW: $('adj-w'), adjWVal: $('adj-w-val'), adjR: $('adj-r'), adjRVal: $('adj-r-val'),
       plan: $('wo-plan'), planStep: $('wo-plan-step'), planSets: $('wo-plan-sets'), planFill: $('wo-plan-fill'),
-      target: $('wo-target'), next: $('wo-next'), nextText: $('wo-next-text'), planDoneBtn: $('btn-plan-done'),
+      target: $('wo-target'), next: $('wo-next'), nextText: $('wo-next-text'), planDoneBtn: $('btn-plan-done'), demo: $('wo-demo'),
     };
     // 루틴(PT 모드): 인식이 안 될 때를 위한 수동 버튼
     $('btn-plan-done').addEventListener('click', () => { if (this.plan && this.pt?.stage === 'work') this._ptComplete({ manual: true }); });
     $('btn-plan-skip').addEventListener('click', () => this._ptSkip());
+    // 쉬는 동안 다음 세트 무게·목표 바로 고치기
+    $('wo-adjust').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-adj]');
+      if (b) this._adjust(b.dataset.adj, Number(b.dataset.d));
+    });
     // 휴식 중: 30초 늘리기 / 바로 끝내기
     $('btn-rest-plus').addEventListener('click', () => {
       if (!this.restUntil) return;
@@ -110,6 +117,8 @@ export class Workout {
       source: source ? 'video' : 'camera',
     };
     this.plan = plan?.items?.length ? new PlanRunner(plan.items) : null;
+    if (this.plan) loadDemos();
+    this._setDemo(null);
     if (this.plan) this.session.plan = { name: plan.name || '오늘 루틴', items: this.plan.items };
     this.pt = this.plan ? { stage: 'work', accum: 0, recs: [], lastActiveAt: 0, readyAt: 0, reminded: false } : null;
     this.el.plan.hidden = !this.plan;
@@ -135,6 +144,7 @@ export class Workout {
     this.frameSaid = {};     // 구도 안내를 말한 횟수 (같은 말은 두 번까지)
     this.lastFrameSay = -Infinity;
     this.lastTempo = null;   // 쉬는 동안 보여줄 직전 세트 템포
+    this.lastEx = null;      // 자유 운동: 방금 끝낸 세트의 운동(휴식 중 무게 조정용)
     this.frameOkAt = null;   // 자리 잡기 확인한 시각
     this.frameGoodSince = null;
     this.prevLogs = [];
@@ -578,6 +588,7 @@ export class Workout {
     this.session.sets.push(rec);
     store.upsertSession(this.session);
     this.setCount[s.exercise] = (this.setCount[s.exercise] || 0) + 1;
+    this.lastEx = s.exercise;
     this._renderSets();
     if (quiet || this.quiet) return;
     const what = s.kind === 'hold' ? `${s.holdSec}초` : `${s.reps}회`;
@@ -663,7 +674,9 @@ export class Workout {
     this._frameCheck(snap, frame, now);
     if (this.plan) {
       this._hudPT(snap, message, now);
+      this._drawAdjust();
       this._drawTempo(snap);
+      this._liftCenter(); // 시범 그림이 생기고 없어지며 아래 패널 높이가 바뀐다
       if (this.cfg.debug) this._debug(snap);
       return;
     }
@@ -702,8 +715,56 @@ export class Workout {
       count.classList.remove('rest', 'tentative');
       this._setText('message', message || (this.session.sets.length ? '다음 운동을 시작하세요' : '운동을 시작하세요'));
     }
+    this._drawAdjust();
     this._drawTempo(snap);
     if (this.cfg.debug) this._debug(snap);
+  }
+
+  // 휴식 중 조정: 루틴은 다음 세트(남은 세트 전부)의 무게·목표, 자유 운동은 방금 한 운동의 다음 세트 무게
+  _adjustTarget() {
+    if (this.plan && this.pt?.stage === 'rest' && this.plan.item) return { ex: this.plan.item.exercise, item: this.plan.item };
+    if (!this.plan && this.restUntil && this.lastEx) return { ex: this.lastEx, item: null };
+    return null;
+  }
+
+  _adjust(kind, d) {
+    const tg = this._adjustTarget();
+    if (!tg) return;
+    const { ex, item } = tg;
+    if (kind === 'w') {
+      const w = item?.weight ?? store.lastWeight(ex) ?? 0;
+      const step = weightStep(ex, d < 0 ? Math.max(0, w - 0.01) : w);
+      const nw = Math.max(0, Math.round((w + d * step) * 10) / 10);
+      if (item) item.weight = nw || undefined;
+      store.rememberWeight(ex, nw || null);
+    } else if (item) {
+      if (isHold(ex)) item.holdSec = Math.max(5, (item.holdSec || 30) + d * 5);
+      else item.reps = Math.max(1, (item.reps || 10) + d);
+    }
+    this.voice.beep(d > 0 ? 990 : 660, 0.05);
+    this._hud();
+  }
+
+  _drawAdjust() {
+    const tg = this._adjustTarget();
+    this.el.adjust.hidden = !tg;
+    if (!tg) return;
+    const { ex, item } = tg;
+    const w = item?.weight ?? store.lastWeight(ex);
+    this._setText('adjWVal', w ? `${w}kg` : '무게 없음');
+    this.el.adjR.hidden = !item;
+    if (item) this._setText('adjRVal', isHold(ex) ? `${item.holdSec}초` : `${item.reps}회`);
+  }
+
+  // 동작 시범(막대 인형): 쉬는 동안엔 다음에 할 운동, 시작 전(0회)엔 지금 운동
+  _setDemo(exId) {
+    const ok = exId && hasDemo(exId);
+    if (this.demoEx === (ok ? exId : null)) return;
+    this.stopDemo?.();
+    this.stopDemo = null;
+    this.demoEx = ok ? exId : null;
+    this.el.demo.hidden = !ok;
+    if (ok) this.stopDemo = playDemo(this.el.demo, exId);
   }
 
   // PT 화면: 위엔 전체 진행, 가운데엔 지금 운동·세트와 '한 횟수 / 목표', 아래엔 다음 운동과 수동 버튼
@@ -743,8 +804,9 @@ export class Workout {
       this.el.target.hidden = true;
       const tip = pl.setNo === 1 ? EXERCISE_BY_ID[it.exercise]?.tip : '';
       this._setText('message', tip ? `📱 ${tip}` : '바로 시작하면 휴식을 끝내고 세요');
-      const html = `다음: <b>${esc(name)} ${pl.setNo}/${it.sets}세트 · ${this._targetWords(it)}</b>`;
+      const html = `다음: <b>${esc(name)} ${pl.setNo}/${it.sets}세트 · ${this._targetWords(it)}${it.weight ? ` · ${it.weight}kg` : ''}</b>`;
       if (this.el.nextText.innerHTML !== html) this.el.nextText.innerHTML = html;
+      this._setDemo(it.exercise);
       return;
     }
     const n = Math.floor(this._ptCount(snap));
@@ -763,8 +825,11 @@ export class Workout {
       else msg = `${left}${unit || '회'} 남았어요`;
     }
     this._setText('message', msg);
-    const html = nx ? `다음: <b>${esc(nxText)}</b>` : '<b>마지막 세트예요!</b>';
+    const html = n === 0 && hasDemo(it.exercise)
+      ? `<b>${esc(name)}</b> 이렇게 해요${nx ? `<br><span class="sub">다음: ${esc(nxText)}</span>` : ''}`
+      : nx ? `다음: <b>${esc(nxText)}</b>` : '<b>마지막 세트예요!</b>';
     if (this.el.nextText.innerHTML !== html) this.el.nextText.innerHTML = html;
+    this._setDemo(n === 0 ? it.exercise : null);
   }
 
   // 자리 잡기: 첫 세트 전(루틴은 운동이 바뀔 때마다) 화면 테두리 색으로 구도를 알려준다.
@@ -975,7 +1040,10 @@ export class Workout {
     const scale = Math.min(W / v.videoWidth, H / v.videoHeight);
     g.fillStyle = '#000';
     g.fillRect(0, 0, W, H);
-    const ox = (W - v.videoWidth * scale) / 2, oy = (H - v.videoHeight * scale) / 2;
+    // 세로 화면에서 남는 위아래 공간은 아래로 몰아 큰 숫자·안내가 사람을 가리지 않게(영상은 위쪽 상태 줄 바로 아래)
+    const topInset = (this.plan ? 128 : 60) * dpr;
+    const ox = (W - v.videoWidth * scale) / 2;
+    const oy = Math.min((H - v.videoHeight * scale) / 2, topInset);
     g.drawImage(v, ox, oy, v.videoWidth * scale, v.videoHeight * scale);
     if (!lm) return;
     const X = (p) => ox + p.x * v.videoWidth * scale;
@@ -1060,6 +1128,7 @@ export class Workout {
 
   _close() {
     this.running = false;
+    this._setDemo(null);
     clearInterval(this.ticker);
     this.tilt.stop();
     this.stream?.getTracks().forEach((tr) => tr.stop());

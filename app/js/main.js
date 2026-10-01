@@ -8,6 +8,7 @@ import { esc, exName, DAYS, fmtDate, fmtTime, minutes, setValue, sessionTotals, 
 import { isNative, NativeApp, NativeTTS, canShareFile, shareTextFile, shareBinaryFile } from './native.js';
 import { summarize as tempoSummary, speeds as tempoSpeeds } from './engine/tempo.js';
 import { listCameras, cameraNames } from './camera.js';
+import { loadDemos, playDemo, hasDemo } from './demo.js';
 import { generateRoutine, routineMinutes, defaultItem, isHold, PLAN_META, FOCUS, EQUIPMENT, LEVELS } from './routine.js';
 
 const $ = (id) => document.getElementById(id);
@@ -129,7 +130,7 @@ const workout = new Workout({
 });
 $('btn-start-auto').addEventListener('click', () => workout.start({ candidates: null }));
 $('btn-start-pick').addEventListener('click', () => push('screen-pick', renderPick));
-$('btn-open-routine').addEventListener('click', () => push('screen-routine', renderRoutine));
+$('btn-open-routine').addEventListener('click', () => { loadDemos().then(() => { if (!$('screen-routine').hidden) renderRoutine(); }); push('screen-routine', renderRoutine); });
 
 /* ---------- 오늘의 루틴 (PT 모드) ---------- */
 const todayKey = () => new Date().toISOString().slice(0, 10);
@@ -174,8 +175,8 @@ function renderRoutine() {
       ${d.reason ? `<p class="muted small routine-reason">💡 ${esc(d.reason)}</p>` : ''}
       <div class="card routine-list">${d.items.map((it, i) => `<div class="r-item">
         <div class="r-no">${i + 1}</div>
-        <div class="r-main"><div class="r-name">${esc(exName(it.exercise))}${EXERCISE_BY_ID[it.exercise]?.verified ? '' : ' <span class="beta">베타</span>'}</div>
-          <div class="r-sub">${itemLine(it)}</div></div>
+        <div class="r-main"><button type="button" class="r-name" data-r-demo="${esc(it.exercise)}">${esc(exName(it.exercise))}${EXERCISE_BY_ID[it.exercise]?.verified ? '' : ' <span class="beta">베타</span>'}${hasDemo(it.exercise) ? ' <span class="demo-ico" aria-label="동작 보기">▶</span>' : ''}</button>
+          <div class="r-sub">${itemLine(it)}</div>${it.why ? `<div class="r-why">${/\+/.test(it.why) ? '⬆ ' : ''}${esc(it.why)}</div>` : ''}</div>
         <div class="r-ctl">
           <button class="mini-btn" data-r-edit="${i}" type="button">수정</button>
           <button class="mini-btn" data-r-up="${i}" type="button" aria-label="위로" ${i ? '' : 'disabled'}>↑</button>
@@ -223,6 +224,8 @@ $('routine-body').addEventListener('click', async (e) => {
   }
   const ed = e.target.closest('[data-r-edit]');
   if (ed) { editRoutineItem(Number(ed.dataset.rEdit)); return; }
+  const dm = e.target.closest('[data-r-demo]');
+  if (dm) { showExerciseInfo(dm.dataset.rDemo); return; }
   if (e.target.closest('#btn-r-add')) { editRoutineItem(null); return; }
   if (e.target.closest('#btn-save-routine') && d) {
     const name = await promptDialog('루틴 저장', '이름', d.name || '내 루틴');
@@ -273,7 +276,7 @@ function editRoutineItem(idx) {
   const sync = (changed) => {
     const ex = $('ri-ex').value;
     $('ri-target-l').textContent = isHold(ex) ? '목표 시간(초)' : '목표 횟수';
-    $('ri-w-field').hidden = PLAN_META[ex]?.eq === 'body';
+    $('ri-w-field').hidden = isHold(ex); // 맨몸 운동도 덤벨·바벨을 들 수 있어서 무게 칸은 보여준다
     if (changed) { // 운동을 바꾸면 그 운동의 기본값으로
       const def = defaultItem(ex, store.routinePrefs().level, store.lastWeight(ex));
       $('ri-target').value = isHold(ex) ? def.holdSec : def.reps;
@@ -305,12 +308,29 @@ function editRoutineItem(idx) {
     };
     if (isHold(ex)) next.holdSec = target; else next.reps = target;
     const w = $('ri-w').value;
-    if (w !== '' && PLAN_META[ex]?.eq !== 'body') { next.weight = Number(w); store.rememberWeight(ex, Number(w)); }
+    if (w !== '' && !isHold(ex) && Number(w) > 0) { next.weight = Number(w); store.rememberWeight(ex, Number(w)); }
     if (it) d.items[idx] = next; else d.items.push(next);
     store.setRoutineDraft({ ...d, edited: true });
     renderRoutine();
   };
   dlg.showModal();
+}
+
+// 운동 설명: 막대 인형 동작 + 카메라 두는 곳 + 자세 포인트
+function showExerciseInfo(id) {
+  const ex = EXERCISE_BY_ID[id];
+  if (!ex) return;
+  const d = $('dialog');
+  const cues = ex.form ? ex.form([], []).map((r) => r[3]).filter(Boolean) : [];
+  const note = PLAN_META[id]?.note;
+  d.innerHTML = `<form method="dialog"><h3>${esc(ex.name)}</h3>
+    ${hasDemo(id) ? '<canvas class="demo-big" id="demo-canvas" aria-label="동작 시범"></canvas>' : '<p class="muted small">이 운동은 아직 동작 시범이 없어요.</p>'}
+    <p class="small" style="margin:8px 0 4px">📱 ${esc(ex.tip)}${note ? ` · ${esc(note)}` : ''}</p>
+    ${cues.length ? `<ul class="feedback small">${cues.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
+    <div class="btn-row"><button value="ok" class="btn btn-primary">닫기</button></div></form>`;
+  const stop = hasDemo(id) ? playDemo($('demo-canvas'), id, { color: getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim() || '#4a7a00', dim: 'rgba(120,130,140,.45)' }) : null;
+  d.onclose = () => stop?.();
+  d.showModal();
 }
 
 export function promptDialog(title, label, value = '') {

@@ -106,7 +106,7 @@ try {
       next: $('wo-next').hidden ? '' : $('wo-next-text').innerText,
     };
   });
-  let prev = '', shotN = 0, sawPending = false, sawTempo = false, endedAt = null, pressedPlus = false;
+  let prev = '', shotN = 0, sawPending = false, sawTempo = false, endedAt = null, pressedPlus = false, pressedAdj = false;
   const t0 = Date.now();
   while (Date.now() - t0 < 180000) {
     await new Promise((r) => setTimeout(r, 300));
@@ -116,6 +116,18 @@ try {
       prev = key;
       console.log(`${String(s.t).padStart(5)}s  ${s.status.padEnd(14)} | ${(s.ex + (s.tentative ? '(후보)' : '')).padEnd(14)} ${(s.count + s.target).padStart(5)} | ${s.msg}${s.plan ? ` | 진행: ${s.plan} | ${s.next}` : ''}${s.tempo && !plan ? ` | 템포: ${s.tempo}` : ''}${s.cue ? ` | 교정: ${s.cue}` : ''}${s.restBtns ? ' | [+30초][휴식 끝내기]' : ''}${s.frame ? ` | 테두리:${s.frame}` : ''}`);
       // 휴식 버튼 시험: 처음 보이면 +30초를 한 번 눌러 본다
+      // 휴식 중 무게·목표 조정 시험: 처음 휴식에서 + 를 한 번씩
+      if (s.restBtns && plan && !pressedAdj) {
+        pressedAdj = true;
+        const r = await page.evaluate(() => {
+          const v = () => [document.getElementById('adj-w-val').innerText, document.getElementById('adj-r-val').innerText, document.getElementById('wo-next-text').innerText];
+          const before = v();
+          document.querySelector('[data-adj="w"][data-d="1"]').click();
+          document.querySelector('[data-adj="r"][data-d="1"]').click();
+          return { before, after: v(), shown: !document.getElementById('wo-adjust').hidden };
+        });
+        console.log(`        [무게+][횟수+] 눌러 봄: ${JSON.stringify(r)}`);
+      }
       if (s.restBtns && !pressedPlus && !plan) {
         pressedPlus = true;
         const before = await page.evaluate(() => document.getElementById('wo-count').innerText);

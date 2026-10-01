@@ -86,8 +86,68 @@ export function defaultItem(id, level = 1, weight = null) {
   const target = meta.reps[level];
   const it = { exercise: id, sets: meta.type === 'cardio' ? Math.min(3, SETS[level]) : SETS[level], rest: REST[meta.type][level] };
   if (isHold(id)) it.holdSec = target; else it.reps = target;
-  if (meta.eq !== 'body' && weight != null) it.weight = weight;
+  if (weight != null && weight > 0) it.weight = weight;
   return it;
+}
+
+/** 무게 올리는 폭(kg): 큰 운동은 무거우면 5, 아니면 2.5 / 작은 운동은 10kg 이상 2, 아니면 1 */
+export function weightStep(id, w) {
+  const t = PLAN_META[id]?.type;
+  if (t === 'compound') return w >= 40 ? 5 : 2.5;
+  return w >= 10 ? 2 : 1;
+}
+
+/**
+ * 점진적 과부하(PT 처럼): 이 운동을 가장 최근에 한 날의 기록을 보고 오늘 목표를 정한다.
+ * - 루틴 목표를 모든 세트에서 채웠으면 → 무게 운동은 무게를 올리고, 맨몸은 2회(버티기는 5초) 늘린다
+ * - 2세트 이상 목표의 80%도 못 했으면 → 무게는 그대로, 맨몸은 2회 줄인다
+ * - 그 밖엔 지난번과 같은 목표·무게
+ * @returns {object|null} 바꾼 항목(why 포함) 또는 기록이 없으면 null
+ */
+export function progressItem(item, sessions) {
+  const id = item.exercise;
+  const meta = PLAN_META[id];
+  const hold = isHold(id);
+  const last = (sessions || []).find((s) => (s.sets || []).some((x) => x.exercise === id));
+  if (!last || !meta) return null;
+  const sets = last.sets.filter((x) => x.exercise === id);
+  const val = (x) => (hold ? x.holdSec : x.reps) ?? 0;
+  const lastW = [...sets].reverse().find((x) => x.weight != null)?.weight ?? null;
+  const planned = sets.filter((x) => x.plan);
+  const it = { ...item };
+  const weighted = lastW != null && lastW > 0; // 스쿼트·런지처럼 맨몸 운동도 무게를 적었으면 무게로 올린다
+  if (planned.length) {
+    const target = planned[0].plan.target;
+    const allHit = planned.length >= 2 && planned.every((x) => val(x) >= x.plan.target);
+    const missed = planned.filter((x) => val(x) < x.plan.target * 0.8).length >= 2;
+    if (hold) it.holdSec = target; else it.reps = target;
+    if (weighted) it.weight = lastW;
+    if (allHit) {
+      if (weighted) {
+        it.weight = lastW + weightStep(id, lastW);
+        it.why = `지난번 목표를 다 채워서 +${weightStep(id, lastW)}kg`;
+      } else if (hold) {
+        it.holdSec = target + 5;
+        it.why = '지난번 다 버텨서 +5초';
+      } else {
+        it.reps = Math.min(target + 2, meta.reps[2] + 6);
+        it.why = '지난번 목표를 다 채워서 +2회';
+      }
+    } else if (missed) {
+      if (!weighted && !hold) it.reps = Math.max(meta.reps[0], target - 2);
+      it.why = weighted ? '지난번 힘들었어요. 같은 무게로 한 번 더' : '지난번 힘들었어요. 조금 줄였어요';
+    } else {
+      it.why = '지난번과 같은 목표로 다시';
+    }
+    return it;
+  }
+  // 루틴이 아닌 자유 운동 기록: 무게만 이어서
+  if (weighted) {
+    it.weight = lastW;
+    it.why = `지난번 ${lastW}kg`;
+    return it;
+  }
+  return null;
 }
 
 // 날짜 + 선택값으로 정해지는 의사난수 (같은 날 같은 선택이면 같은 루틴, '다른 구성으로'를 누르면 바뀜)
@@ -164,6 +224,13 @@ export function generateRoutine({ focus = 'auto', equipment = 'body', minutes = 
     used.add(it.exercise);
     total += sec;
   }
+  // 점진적 과부하: 지난 기록을 보고 무게·횟수 조정
+  let progressed = 0;
+  for (const [k, it] of items.entries()) {
+    const p = progressItem(it, sessions);
+    if (p) { items[k] = p; if (/\+/.test(p.why)) progressed++; }
+  }
+  if (progressed) reason = [reason, `지난 기록을 보고 ${progressed}가지 운동의 무게·횟수를 올렸어요`].filter(Boolean).join(' · ');
   // 하는 순서: 큰 운동 → 작은 운동 → 코어 → 유산소 마무리 (유산소 루틴은 섞어서 순환하도록 그대로)
   const RANK = { compound: 0, iso: 1, core: 2, cardio: 3 };
   if (focus !== 'cardio') items.sort((a, b) => RANK[PLAN_META[a.exercise].type] - RANK[PLAN_META[b.exercise].type]);
