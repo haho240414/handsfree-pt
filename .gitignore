@@ -1,6 +1,7 @@
 node_modules/
 test/videos/
 test/videos2/
+test/videos3/
 test/videos_web/
 .DS_Store
 android-signing/

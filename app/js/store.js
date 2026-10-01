@@ -7,10 +7,15 @@ export const DEFAULT_SETTINGS = {
   countStyle: 'native', // native(하나 둘 셋) | number(일 이 삼)
   cues: true,           // 자세 교정 음성
   rest: 60,             // 휴식 타이머(초), 0 = 끔
+  restAlerts: [10],     // 휴식 끝 몇 초 전에 알려줄지 (30·10·5, 3 = '셋 둘 하나')
+  setEndSec: 0,         // 반복이 멈추고 이 초가 지나면 세트 끝, 0 = 자동(평소 반복 간격의 2.2배, 3.5~12초)
   model: 'full',        // full(정확) | lite(빠름)
   gpu: true,            // GPU 가속 (끄면 CPU 호환 모드)
   lockReps: 2,          // 자동 인식 확정에 필요한 반복 수
-  mirror: true,         // 화면 좌우 반전(거울처럼)
+  mirror: true,         // 화면 좌우 반전(거울처럼, 전면 카메라일 때만)
+  cameraId: '',         // 고른 카메라(deviceId), '' = 전면 기본
+  cameraLabel: '',
+  cameraWide: true,     // 넓게 보기: 센서 전체(4:3)로 찍고, 줌을 줄일 수 있으면 가장 넓게(광각)
   debug: false,         // 인식 과정 보기
   theme: 'auto',        // auto | light | dark
 };

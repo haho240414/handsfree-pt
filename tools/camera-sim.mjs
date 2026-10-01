@@ -3,6 +3,8 @@
 // 화면에 나온 안내·카운트·템포를 시간순으로 기록하고, 끝나면 요약 화면·진단 기록 내보내기 → tools/replay.mjs 재현까지 확인한다.
 //   node tools/camera-sim.mjs [영상이름=squat_mensgarage] [--shots 폴더] [--tilt 20]
 //   --tilt N : 폰을 N°(+ = 뒤로 기대 올려다봄) 기울여 둔 것처럼 기울기 센서 값을 흘려 넣는다
+//   --set 키=값 : 설정을 바꿔서 실행 (여러 번 가능, 예: --set rest=15 --set setEndSec=3 --set restAlerts=10,5,3)
+//   --after N : 영상이 끝난 뒤 N초 더 지켜본다 (휴식 타이머·알림 확인용, 기본 4)
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -18,6 +20,12 @@ const opt = (k, d) => (argv.includes(k) ? argv[argv.indexOf(k) + 1] : d);
 const clip = argv.find((a, i) => !a.startsWith('--') && !argv[i - 1]?.startsWith('--')) || 'squat_mensgarage';
 const shots = opt('--shots', null);
 const tilt = opt('--tilt', null);
+const after = Number(opt('--after', 4));
+const sets = argv.flatMap((a, i) => (a === '--set' ? [argv[i + 1]] : [])).map((kv) => {
+  const [k, v] = kv.split('=');
+  const val = v.includes(',') || k === 'restAlerts' ? v.split(',').filter(Boolean).map(Number) : /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v === 'true' ? true : v === 'false' ? false : v;
+  return [k, val];
+});
 if (shots) fs.mkdirSync(shots, { recursive: true });
 
 const server = createServer();
@@ -49,7 +57,19 @@ try {
     }
   }, `/test/videos_web/${clip}.mp4`, tilt == null ? null : Number(tilt));
   await page.goto(`${base}/`);
-  await page.evaluate(() => { window.__hfpt.store.setSetting('gpu', false); window.__hfpt.store.setSetting('rest', 30); });
+  await page.evaluate((kv) => {
+    window.__hfpt.store.setSetting('gpu', false);
+    window.__hfpt.store.setSetting('rest', 30);
+    for (const [k, v] of kv) window.__hfpt.store.setSetting(k, v);
+    // 앱이 말하는 내용을 시각과 함께 기록
+    window.__said = [];
+    const voice = window.__hfpt.workout.voice;
+    const t0 = performance.now();
+    for (const fn of ['say', 'count']) {
+      const orig = voice[fn].bind(voice);
+      voice[fn] = (...args) => { window.__said.push([((performance.now() - t0) / 1000).toFixed(1), fn, String(args[0]), args[1] && typeof args[1] === 'string' ? args[1] : '']); return orig(...args); };
+    }
+  }, sets);
   await page.click('#btn-start-auto');
 
   // 화면 상태를 0.3초마다 읽어 바뀔 때만 기록
@@ -62,9 +82,10 @@ try {
       tentative: $('wo-count').classList.contains('tentative'), msg: $('wo-message').innerText,
       tempo: $('wo-tempo').hidden ? '' : $('wo-tempo-text').innerText.replace(/\s+/g, ' '),
       cue: $('wo-cue').hidden ? '' : $('wo-cue').innerText,
+      restBtns: !$('wo-rest-actions').hidden,
     };
   });
-  let prev = '', shotN = 0, sawPending = false, sawTempo = false, endedAt = null;
+  let prev = '', shotN = 0, sawPending = false, sawTempo = false, endedAt = null, pressedPlus = false;
   const t0 = Date.now();
   while (Date.now() - t0 < 180000) {
     await new Promise((r) => setTimeout(r, 300));
@@ -72,16 +93,28 @@ try {
     const key = JSON.stringify({ ...s, t: 0, ended: 0, status: s.status.replace(/\d+fps/, '') });
     if (key !== prev) {
       prev = key;
-      console.log(`${String(s.t).padStart(5)}s  ${s.status.padEnd(14)} | ${(s.ex + (s.tentative ? '(후보)' : '')).padEnd(14)} ${s.count.padStart(3)} | ${s.msg}${s.tempo ? ` | 템포: ${s.tempo}` : ''}${s.cue ? ` | 교정: ${s.cue}` : ''}`);
+      console.log(`${String(s.t).padStart(5)}s  ${s.status.padEnd(14)} | ${(s.ex + (s.tentative ? '(후보)' : '')).padEnd(14)} ${s.count.padStart(3)} | ${s.msg}${s.tempo ? ` | 템포: ${s.tempo}` : ''}${s.cue ? ` | 교정: ${s.cue}` : ''}${s.restBtns ? ' | [+30초][휴식 끝내기]' : ''}`);
+      // 휴식 버튼 시험: 처음 보이면 +30초를 한 번 눌러 본다
+      if (s.restBtns && !pressedPlus) {
+        pressedPlus = true;
+        const before = await page.evaluate(() => document.getElementById('wo-count').innerText);
+        await page.click('#btn-rest-plus');
+        await new Promise((r) => setTimeout(r, 300));
+        const afterTxt = await page.evaluate(() => document.getElementById('wo-count').innerText);
+        console.log(`        [+30초] 눌러 봄: ${before} → ${afterTxt}`);
+      }
       const first = (s.tentative && !sawPending) || (s.tempo && !sawTempo);
       sawPending ||= s.tentative;
       sawTempo ||= !!s.tempo;
       if (shots && (first || shotN < 1)) await page.screenshot({ path: path.join(shots, `${clip}-${++shotN}.png`) });
     }
     if (s.ended && endedAt == null) endedAt = Date.now();
-    if (endedAt && Date.now() - endedAt > 4000) break;
+    if (endedAt && Date.now() - endedAt > after * 1000) break;
   }
   if (shots) await page.screenshot({ path: path.join(shots, `${clip}-rest.png`) });
+  const said = await page.evaluate(() => window.__said);
+  console.log('\n앱이 말한 내용(시작 기준 초):');
+  for (const [t, fn, text, cue] of said) console.log(`  ${t.padStart(5)}s ${fn === 'count' ? '카운트' : '음성'}: ${text}${cue ? ` (${cue})` : ''}`);
   await page.click('#btn-end');
   await new Promise((r) => setTimeout(r, 800));
   const sum = await page.evaluate(() => ({

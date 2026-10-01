@@ -76,6 +76,9 @@ export const EXERCISES = [
       ['무릎을 굽힘', and(lt(P(w, 'knee', 10), 130), gt(R(w, 'knee'), 25))],
       ['엉덩이만 접는 동작 아님(데드리프트 아님)', not(and(gt(P(w, 'torsoTilt', 90), 60), gt(P(w, 'knee', 10), 90))), 'soft'],
       ['두 무릎 높이가 비슷(런지 아님)', lt(M(b, 'kneeYDiff'), 0.2), 'soft'],
+      // 실측: 스쿼트는 좌우 무릎 차 25° 이하·몸 기준 발 간격 0.3~0.6m, 사이드 런지는 77°까지·0.73~0.85m
+      ['바에 매달리지 않음(행잉 레그 레이즈 아님)', not(gt(P(w, 'wristH', 10), 0.2)), 'soft'],
+      ['양쪽 무릎을 같이 굽힘(사이드 런지 아님)', not(and(gt(M(b, 'kneeAsym'), 35), gt(M(b, 'stanceW'), 0.55))), 'soft'],
       ['팔을 머리 위로 흔들지 않음', not(and(gt(P(w, 'wristH', 90), 0.15), gt(R(w, 'wristH'), 0.5))), 'soft'],
       ['운동 거리에 서 있음', atDistance(w), 'soft'],
     ],
@@ -97,6 +100,7 @@ export const EXERCISES = [
       ['앞뒤로 다리를 벌림(뒷무릎이 내려감)', gt(M(b, 'kneeYDiff'), 0.2), 'core'],
       ['상체를 세움', lt(M(w, 'torsoTilt'), 45)],
       ['무릎을 굽힘', lt(P(w, 'knee', 10), 140)],
+      ['뒷발을 올리지 않음(불가리안 스플릿 스쿼트 아님)', not(gt(P(w, 'ankleYDiff', 90), 0.22)), 'soft'],
       ['운동 거리에 서 있음', atDistance(w), 'soft'],
     ],
     // 실측: 바닥에서 무릎각 60~96°, 상체 기울기 7~24°
@@ -134,6 +138,100 @@ export const EXERCISES = [
       ['상체를 세움', lt(M(w, 'torsoTilt'), 25)],
       ['몸 전체가 위로 올라감', gt(R(w, 'shY'), 0.012), 'soft'],
       ['팔은 고정', lt(R(w, 'wristH'), 0.15), 'soft'],
+    ],
+  },
+
+  {
+    id: 'legpress', name: '레그 프레스', group: '하체', unit: '회', kind: 'reps', priority: 5, verified: false,
+    tip: '옆에서 엉덩이~발끝이 보이게 (기구에 다리가 덜 가리는 쪽)',
+    // 등을 기대고 누운 자세로 발판을 밀어냄. 기구에 다리가 가려 관절이 자주 튀어서 베타.
+    // 실측: 몸통 63~77°(기댐), 발이 엉덩이보다 0.15~0.55m 위, 무릎 92~103° ↔ 150~157°
+    signal: (f) => f.knee, prom: 35, minDur: 0.6, maxDur: 8,
+    tempo: { first: 'ecc', ecc: '내리기', con: '밀기', dist: (f) => f.hipH },
+    check: (w) => [
+      ['등을 기대고 발이 엉덩이보다 위', and(between(M(w, 'torsoTilt'), 35, 85), lt(M(w, 'hipH'), -0.1)), 'core'],
+      ['무릎을 굽혔다 폄', and(lt(P(w, 'knee', 10), 115), gt(P(w, 'knee', 90), 135)), 'core'],
+      ['엉덩이도 같이 접힘', gt(R(w, 'hip'), 25)],
+      ['얼굴이 위(엎드린 자세 아님)', not(faceDown(w))],
+    ],
+  },
+  {
+    id: 'legext', name: '레그 익스텐션', group: '하체', unit: '회', kind: 'reps', priority: 5, verified: true,
+    tip: '옆이나 대각선에서 무릎~발끝이 보이게',
+    // 기구에 앉아 무릎만 폈다 굽힘. 실측: 무릎 87~97° → 150~160°, 엉덩이 각 91~109°(앉음), 몸통 9~15°, 발이 0.35m 올라옴
+    signal: (f) => -f.knee, prom: 35, minDur: 0.5, maxDur: 8,
+    tempo: { first: 'con', con: '펴기', ecc: '내리기', dist: (f) => f.hipH },
+    check: (w) => [
+      ['앉은 자세', and(between(M(w, 'hip'), 70, 130), lt(M(w, 'torsoTilt'), 40)), 'core'],
+      ['무릎을 굽힌 상태에서 폄', and(lt(P(w, 'knee', 10), 115), gt(P(w, 'knee', 90), 135)), 'core'],
+      ['발이 앞으로 올라옴', gt(R(w, 'hipH'), 0.15)],
+      ['엉덩이는 고정(스쿼트 아님)', lt(R(w, 'hip'), 30)],
+      ['팔은 고정', lt(R(w, 'wristH'), 0.15), 'soft'],
+    ],
+  },
+  {
+    id: 'legcurl', name: '레그 컬', group: '하체', unit: '회', kind: 'reps', priority: 5, verified: true,
+    tip: '옆에서 엉덩이~발끝이 보이게 (엎드려 하는 기구)',
+    // 엎드려 발뒤꿈치를 엉덩이 쪽으로 당김. 실측: 무릎 160~169° → 60~70°, 몸통 95~100°, 엉덩이 각 140~150° 유지
+    signal: (f) => f.knee, prom: 40, minDur: 0.6, maxDur: 8,
+    tempo: { first: 'con', con: '당기기', ecc: '펴기', dist: (f) => f.hipH },
+    check: (w) => [
+      ['엎드린 자세', and(gt(M(w, 'torsoTilt'), 65), faceDown(w)), 'core'],
+      ['무릎을 깊게 굽힘', and(lt(P(w, 'knee', 10), 100), gt(R(w, 'knee'), 50)), 'core'],
+      ['엉덩이는 펴진 채(마운틴 클라이머 아님)', gt(P(w, 'hip', 10), 115)],
+      ['팔로 몸을 밀지 않음(푸시업 아님)', lt(R(w, 'shoulderOverWrist'), 0.1), 'soft'],
+    ],
+  },
+  {
+    id: 'sidelunge', name: '사이드 런지', group: '하체', unit: '회', kind: 'reps', priority: 7, verified: true,
+    tip: '정면에서 양발 끝까지 보이게',
+    // 발을 옆으로 넓게 벌리고 한쪽 무릎만 굽혀 앉음 — 한쪽 1회.
+    // 실측: 굽힌 무릎 69~109°·반대 무릎 145~171°(차이 46~87°), 몸 기준 좌우 발 간격 0.7~0.85m (스쿼트 0.3~0.6m)
+    signal: (f) => f.kneeMin, prom: 30, minDur: 0.5, maxDur: 8,
+    tempo: { first: 'ecc', ecc: '앉기', con: '일어서기', dist: (f) => f.hipH },
+    check: (w, b) => [
+      ['서서 하는 동작', standing(w), 'core'],
+      ['발을 옆으로 넓게 벌림', gt(M(b, 'stanceW'), 0.55), 'core'],
+      ['한쪽 무릎만 굽힘', gt(M(b, 'kneeAsym'), 35), 'core'],
+      ['앞뒤로 벌리지 않음(런지 아님)', lt(M(b, 'stanceD'), 0.35), 'soft'],
+      ['운동 거리에 서 있음', atDistance(w), 'soft'],
+    ],
+  },
+  {
+    id: 'bulgarian', name: '불가리안 스플릿 스쿼트', group: '하체', unit: '회', kind: 'reps', priority: 7, verified: false,
+    tip: '옆이나 대각선에서 두 다리가 다 보이게',
+    // 뒷발을 벤치에 올리고 앞다리로 앉았다 일어섬. 실측: 선 자세 두 발목 높이 차 0.43~0.47m(런지 0.18 이하),
+    // 앉으면 뒷발이 가려져 0.1대로 작게 잡히므로 반복 구간의 최댓값(P90)으로 본다. 앞다리 엉덩이 각 160° → 67°
+    signal: (f) => f.hipMin, prom: 30, minDur: 0.5, maxDur: 8,
+    tempo: { first: 'ecc', ecc: '내려가기', con: '올라오기', dist: (f) => f.hipH },
+    check: (w) => [
+      // 실측(옆모습): AI가 좌우 다리를 바꿔 잡아 0.25~0.31m로 작게 나옴 → 런지(0.18 이하)와의 사이로
+      ['뒷발을 높이 올림', gt(P(w, 'ankleYDiff', 90), 0.22), 'core'],
+      ['앞무릎을 굽힘', lt(P(w, 'kneeMin', 10), 110), 'core'],
+      ['엉덩이가 내려갔다 올라옴', gt(R(w, 'hipH'), 0.08)],
+      ['상체가 수평까지 숙여지지 않음', lt(M(w, 'torsoTilt'), 60)],
+      ['운동 거리에 서 있음', atDistance(w), 'soft'],
+    ],
+  },
+  {
+    id: 'wallsit', name: '벽 스쿼트(월 싯)', group: '하체', unit: '초', kind: 'hold', priority: 3, verified: false, auto: false,
+    tip: '옆에서 머리~발끝이 보이게',
+    // 의자·벤치에 앉아 쉬는 자세와 구별이 안 돼서 자동 인식에선 빼고, 골라서 시작할 때만 잰다
+    // 실측: 무릎 109~117°(정면은 덜 굽게 보임), 엉덩이 각 101~119°, 몸통 1~13°, 엉덩이 높이 0.38~0.53m
+    pose: (f) => f.torsoTilt < 30 && f.knee > 70 && f.knee < 135 && f.hip > 70 && f.hip < 135
+      && !(f.hipH >= 0.62) && !(f.hipH <= 0.2),
+    still: (w) => R(w, 'hip') < 15 && !(R(w, 'knee') >= 15),
+  },
+  {
+    id: 'donkey', name: '동키킥', group: '하체', unit: '회', kind: 'reps', priority: 5, verified: false,
+    tip: '옆에서 머리~발끝이 보이게',
+    // 네발 자세에서 한 다리를 뒤로 차올림. 실측: 차는 다리 엉덩이 각 92~98° → 131~142°, 몸통 82~86°, 팔은 편 채
+    signal: (f) => -f.hipMax, prom: 25, minDur: 0.5, maxDur: 6,
+    tempo: { first: 'con', con: '차올리기', ecc: '내리기' },
+    check: (w) => [
+      ['네발 자세(엎드려 팔로 지탱)', and(gt(M(w, 'torsoTilt'), 60), gt(P(w, 'shoulderOverWrist', 10), 0.3), faceDown(w)), 'core'],
+      ['다리를 뒤로 차올림', and(gt(P(w, 'hipMax', 90), 120), lt(P(w, 'hipMax', 10), 112)), 'core'],
+      ['팔은 편 채 유지(푸시업 아님)', lt(R(w, 'shoulderOverWrist'), 0.1)],
     ],
   },
 
@@ -178,13 +276,14 @@ export const EXERCISES = [
     tip: '정면에서 머리 위 손끝까지 보이게',
     signal: (f) => -f.wristH, prom: 0.18, minDur: 0.5, maxDur: 8,
     tempo: { first: 'con', con: '밀기', ecc: '내리기', dist: (f) => f.wristH },
-    check: (w) => [
+    check: (w, b) => [
       ['상체를 세움', lt(M(w, 'torsoTilt'), 35), 'core'],
       ['머리 위로 밀어올림', gt(P(w, 'wristH', 90), 0.12), 'core'],
       // 점핑잭(팔 편 채 엉덩이~머리 위)과 구분: 팔꿈치를 굽혔다 펴거나, 어깨 높이에서 밀어올림
       ['어깨 높이에서 밀어올림', or(gt(RS(w, 'elbowL', 'elbowR'), 30), gt(P(w, 'wristH', 10), -0.3))],
       ['몸은 제자리(풀업 아님)', not(gt(R(w, 'shY'), 0.1))],
       ['팔꿈치가 어깨 높이까지 내려옴(트라이셉 아님)', lt(P(w, 'arm', 10), 125), 'soft'],
+      ['위에서 팔을 폄(업라이트 로우 아님)', not(lt(M(b, 'elbow'), 130)), 'soft'],
       // 바를 넓게 잡고 앉아서 당기면 랫풀다운 (서서 하는 바벨 프레스는 무릎이 펴져 있어 통과)
       // 바 간격인데 '선 자세'가 확인 안 되면(무릎이 기구에 가려진 경우 포함) 랫풀다운으로 본다
       ['덤벨 간격이거나 선 자세(랫풀다운 아님)', !(barGrip(w) === true && gt(M(w, 'knee'), 150) !== true), 'soft'],
@@ -229,6 +328,50 @@ export const EXERCISES = [
       ['팔꿈치를 거의 폄', gt(P(w, 'elbow', 10), 110), 'soft'],
       ['다리는 고정', legsStill(w), 'soft'],
       ['운동 거리에 서 있음', atDistance(w), 'soft'],
+    ],
+  },
+
+  {
+    id: 'fly', name: '체스트 플라이', group: '가슴·어깨', unit: '회', kind: 'reps', priority: 5, verified: true,
+    tip: '정면이나 대각선에서 양팔 끝까지 보이게 (덤벨·펙덱·케이블)',
+    // 팔을 몸통과 수직으로 둔 채 양손을 벌렸다 모음. 누워서 하는 덤벨은 모은 채 시작, 펙덱은 벌린 채 시작(leadIn)
+    // 실측: 손목 간격 0.18~0.46 ↔ 1.07~1.25m, 팔 각도 63~104°, 팔꿈치 128~157°(살짝 굽힘)
+    signal: (f) => -f.wristDist, prom: 0.25, minDur: 0.5, maxDur: 8, leadIn: true,
+    tempo: { first: 'ecc', ecc: '벌리기', con: '모으기', dist: (f) => f.wristDist },
+    check: (w) => [
+      ['양손을 벌렸다 모음', and(gt(R(w, 'wristDist'), 0.3), lt(P(w, 'wristDist', 10), 0.6)), 'core'],
+      // 실측: 정면·대각선 63~104°, 발 쪽에서 본 누운 플라이는 원근 때문에 137°까지
+      ['팔을 몸통과 수직으로(레이즈·프레스 아님)', and(gt(P(w, 'arm', 10), 45), lt(P(w, 'arm', 90), 145)), 'core'],
+      ['팔꿈치는 살짝만 굽힘(프레스 아님)', gt(P(w, 'elbow', 10), 105)],
+      ['숙인 자세 아님(리어 델트 플라이 아님)', not(and(between(M(w, 'torsoTilt'), 30, 75), faceDown(w))), 'soft'],
+    ],
+  },
+  {
+    id: 'uprightrow', name: '업라이트 로우', group: '가슴·어깨', unit: '회', kind: 'reps', priority: 5, verified: true,
+    tip: '정면에서 양팔 끝까지 보이게',
+    // 팔꿈치를 굽힌 채 어깨 높이 이상으로 끌어올림. 실측: 팔꿈치 145° → 위에서 113~125°, 팔 들림 22 → 117~125°, 손목 간격 0.45~0.5m
+    signal: (f) => -f.wristH, prom: 0.25, minDur: 0.5, maxDur: 8,
+    tempo: { first: 'con', con: '끌어올리기', ecc: '내리기', dist: (f) => f.wristH },
+    check: (w, b) => [
+      ['상체를 세움', lt(M(w, 'torsoTilt'), 35), 'core'],
+      ['팔을 내린 상태에서 시작', lt(P(w, 'wristH', 10), -0.3), 'core'],
+      ['팔꿈치를 굽혀 끌어올림', and(lt(M(b, 'elbow'), 130), gt(P(w, 'arm', 90), 75)), 'core'],
+      ['손은 몸 가까이(레터럴 레이즈 아님)', lt(M(b, 'wristDX'), 0.75)],
+      ['다리는 고정', legsStill(w), 'soft'],
+    ],
+  },
+  {
+    id: 'reversefly', name: '리어 델트 플라이', group: '가슴·어깨', unit: '회', kind: 'reps', priority: 5, verified: false,
+    tip: '정면이나 옆에서 숙인 상체와 양팔이 보이게',
+    // 상체를 숙인 채 팔을 옆으로 벌려 올림. 실측(정면): 몸통 43~57°, 손목 간격 0.07 → 1.3m, 팔꿈치 150° 이상
+    signal: (f) => -f.wristDist, prom: 0.3, minDur: 0.5, maxDur: 8,
+    tempo: { first: 'con', con: '벌리기', ecc: '모으기', dist: (f) => f.wristDist },
+    check: (w) => [
+      ['상체를 숙임', between(M(w, 'torsoTilt'), 30, 95), 'core'],
+      ['상체 고정(데드리프트 아님)', lt(R(w, 'torsoTilt'), 20), 'core'],
+      ['양팔을 벌림', gt(R(w, 'wristDist'), 0.4), 'core'],
+      ['팔꿈치를 거의 폄(로우 아님)', gt(P(w, 'elbow', 10), 120)],
+      ['서서 하는 동작', gt(P(w, 'hipH', 50), 0.4), 'soft'],
     ],
   },
 
@@ -279,6 +422,21 @@ export const EXERCISES = [
     ],
   },
 
+  {
+    id: 'seatedrow', name: '시티드 로우', group: '등', unit: '회', kind: 'reps', priority: 5, verified: true,
+    tip: '옆이나 대각선에서 팔과 몸통이 보이게 (케이블·머신)',
+    // 앉아서 손잡이를 배 쪽으로 당김 — 손 높이는 그대로, 어깨 쪽으로 가까워짐
+    // 실측: 팔꿈치 135~142° → 82~92°, 손목 높이 -0.21~-0.27m(변화 0.04), 어깨-손목 수평 거리 0.42 → 0.25m, 엉덩이 각 103~115°
+    signal: (f) => f.elbowMin, prom: 30, minDur: 0.5, maxDur: 8,
+    tempo: { first: 'con', con: '당기기', ecc: '풀기', dist: (f) => f.reach },
+    check: (w) => [
+      ['앉은 자세', and(between(M(w, 'hip'), 65, 135), lt(M(w, 'torsoTilt'), 40)), 'core'],
+      ['손이 몸 쪽으로 당겨짐(높이는 그대로)', and(lt(R(w, 'wristH'), 0.15), gt(R(w, 'reach'), 0.1)), 'core'],
+      ['팔을 당김', lt(P(w, 'elbowMin', 10), 115)],
+      ['다리는 고정(레그 익스텐션 아님)', lt(R(w, 'knee'), 25), 'soft'],
+    ],
+  },
+
   // ───────── 팔 ─────────
   {
     id: 'curl', name: '덤벨 컬', group: '팔', unit: '회', kind: 'reps', priority: 5, verified: true,
@@ -288,7 +446,8 @@ export const EXERCISES = [
     tempo: { first: 'con', con: '들기', ecc: '내리기', dist: (f) => f.wristHMax },
     check: (w) => [
       ['상체를 세움', lt(M(w, 'torsoTilt'), 35), 'core'],
-      ['손목이 어깨 쪽으로 올라옴', and(gt(R(w, 'wristHMax'), 0.25), gt(P(w, 'wristHMax', 90), -0.2)), 'core'],
+      // 실측: 컬은 손목이 어깨 아래 0.03~0.06m까지 올라옴, 케이블 푸시다운은 0.20m(가슴)에서 멈춤
+      ['손목이 어깨 쪽으로 올라옴', and(gt(R(w, 'wristHMax'), 0.25), gt(P(w, 'wristHMax', 90), -0.14)), 'core'],
       ['팔을 충분히 굽힘', lt(P(w, 'elbowMin', 10), 112)],
       ['팔꿈치를 옆구리 가까이', lt(P(w, 'arm', 90), 70), 'soft'],
       ['손이 어깨보다 아래', lt(P(w, 'wristHMax', 90), 0.12), 'soft'],
@@ -325,6 +484,23 @@ export const EXERCISES = [
       ['몸이 팔 힘으로 오르내림(컬 아님)', and(gt(R(w, 'shY'), 0.05), or(gt(M(w, 'torsoTilt'), 20), gt(R(w, 'shY'), 0.09))), 'core'],
       ['상체가 서 있거나 뒤로 기댐(푸시업 아님)', and(lt(M(w, 'torsoTilt'), 60), not(faceDown(w)))],
       ['팔을 굽혔다 폄', gt(RS(w, 'elbowL', 'elbowR'), 30)],
+    ],
+  },
+
+  {
+    id: 'pushdown', name: '트라이셉 푸시다운', group: '팔', unit: '회', kind: 'reps', priority: 5, verified: false,
+    tip: '옆이나 대각선에서 팔 전체가 보이게 (케이블)',
+    // 위팔을 옆구리에 붙인 채 아래팔만 내려 폄.
+    // 실측: 팔꿈치 78~86° → 150~155°, 손목 높이 -0.20(가슴) → -0.46m, 위팔 각 6~23°, 몸통 23~33°
+    signal: (f) => -f.elbow, prom: 35, minDur: 0.4, maxDur: 8,
+    tempo: { first: 'con', con: '밀어 내리기', ecc: '올리기', dist: (f) => f.wristH },
+    check: (w) => [
+      ['상체를 세움', lt(M(w, 'torsoTilt'), 45), 'core'],
+      ['서 있음(앉아서 하는 로우 아님)', not(lt(M(w, 'knee'), 140))],
+      // 실측: 푸시다운 위팔 각 21~27°·손목 최고 -0.21~-0.25m, 덜 올린 덤벨 컬은 40°·-0.13m
+      ['위팔을 옆구리에 붙임', lt(P(w, 'arm', 90), 35), 'core'],
+      ['팔꿈치를 굽혔다 끝까지 폄', and(lt(P(w, 'elbow', 10), 105), gt(P(w, 'elbow', 90), 140)), 'core'],
+      ['손은 가슴 아래에서 움직임(컬 아님)', lt(P(w, 'wristH', 90), -0.16)],
     ],
   },
 
@@ -381,12 +557,66 @@ export const EXERCISES = [
     // 매 프레임 자세 조건 (버티는 동작이라 반복 대신 시간을 잰다). 발·무릎이 안 보이면 그 조건은 넘어간다
     pose: (f) => f.torsoTilt > 55 && f.torsoTilt < 120
       && f.hip > 140 && !(f.knee <= 140)
-      && !(f.hipH >= 0.5) && f.shoulderOverWrist > 0.12,
+      && !(f.hipH >= 0.5) && f.shoulderOverWrist > 0.12
+      && !(f.shRoll > 40), // 어깨가 위아래로 포개지면 사이드 플랭크 (실측 71~75°, 플랭크·푸시업 18° 이하)
     // 최근 구간이 움직이지 않는지 (푸시업과 구분)
     still: (w) => R(w, 'shoulderOverWrist') < 0.06 && !(R(w, 'hipH') >= 0.08) && R(w, 'hip') < 15,
     form: (w) => [
       ['sag', M(w, 'hipSag') > 0.08, '엉덩이 올리기', '허리가 처졌어요. 배에 힘을 주세요'],
       ['pike', M(w, 'hipSag') < -0.12, '엉덩이 내리기', '엉덩이가 너무 높아요. 몸을 일직선으로'],
+    ],
+  },
+
+  {
+    id: 'hanglegraise', name: '행잉 레그 레이즈', group: '코어', unit: '회', kind: 'reps', priority: 6, verified: true,
+    tip: '정면이나 옆에서 바와 발끝까지 보이게',
+    // 바에 매달려 다리(무릎)를 들어올림. 실측: 엉덩이 각 165~170° → 28~39°, 팔은 편 채 머리 위(손목 높이 0.4m)
+    signal: (f) => f.hip, prom: 50, minDur: 0.5, maxDur: 8,
+    tempo: { first: 'con', con: '올리기', ecc: '내리기', dist: (f) => f.hipH },
+    check: (w) => [
+      ['바에 매달림(팔이 머리 위)', gt(P(w, 'wristH', 50), 0.25), 'core'],
+      ['다리를 들어올림', lt(P(w, 'hip', 10), 110), 'core'],
+      ['팔은 편 채(풀업 아님)', gt(P(w, 'elbow', 10), 130)],
+      ['상체를 세움', lt(M(w, 'torsoTilt'), 40)],
+    ],
+  },
+  {
+    id: 'russian', name: '러시안 트위스트', group: '코어', unit: '회', kind: 'reps', priority: 5, verified: false,
+    tip: '정면이나 대각선에서 몸통과 손이 보이게',
+    // 앉아서 상체를 뒤로 기울인 채 손을 좌우로 — 한쪽 1회. 실측: 손이 골반 중심에서 좌우로 0.17~0.19m, 몸통 39~46°
+    signal: (f) => -Math.abs(f.handSide), prom: 0.1, minDur: 0.25, maxDur: 4,
+    check: (w) => [
+      ['앉아서 상체를 뒤로 기울임', and(between(M(w, 'torsoTilt'), 20, 70), between(M(w, 'hip'), 60, 135)), 'core'],
+      ['손을 옆으로 보냄', or(gt(P(w, 'handSide', 90), 0.08), lt(P(w, 'handSide', 10), -0.08)), 'core'],
+      // 실측: 바닥에 앉으면 발목이 엉덩이와 비슷한 높이(-0.15~0.07m), 레그 익스텐션 의자는 0.43m 아래
+      ['바닥에 앉음(기구 의자 아님)', lt(M(w, 'hipH'), 0.25)],
+      ['가슴이 위·앞을 향함', gt(M(w, 'chestUp'), 0.15)],
+      ['상체는 그대로(윗몸일으키기 아님)', lt(R(w, 'torsoTilt'), 20)],
+      ['얼굴이 위(엎드린 자세 아님)', not(faceDown(w))],
+    ],
+  },
+  {
+    id: 'bicycle', name: '바이시클 크런치', group: '코어', unit: '회', kind: 'reps', priority: 5, verified: false,
+    tip: '옆에서 머리~발끝이 보이게',
+    // 누워서 무릎을 번갈아 당김 — 한쪽 1회. 실측: 당긴 무릎 52~79°, 편 다리 140~163°(좌우 차 최대 85~97°)
+    signal: (f) => -f.kneeAsym, prom: 40, minDur: 0.25, maxDur: 3,
+    check: (w) => [
+      // 실측: 가슴이 위를 향함 0.27~0.99(비틀 때 작아짐), 엎드린 운동은 -0.95 이하
+      ['누운 자세(가슴이 위)', and(gt(M(w, 'torsoTilt'), 60), gt(M(w, 'chestUp'), 0.2)), 'core'],
+      ['다리를 번갈아 굽혔다 폄', gt(P(w, 'kneeAsym', 90), 50), 'core'],
+      ['다리를 든 채(바닥 브릿지 아님)', lt(M(w, 'hipH'), 0.1)],
+      // 실측: 바이시클 손 좌우 이동 0.6m, 한 다리 브릿지는 손이 바닥에 고정
+      ['상체를 비틂(팔꿈치를 반대 무릎 쪽으로)', gt(R(w, 'handSide'), 0.15)],
+    ],
+  },
+  {
+    id: 'sideplank', name: '사이드 플랭크', group: '코어', unit: '초', kind: 'hold', priority: 4, verified: true,
+    tip: '정면에서 머리~발끝이 한 화면에',
+    // 옆으로 누워 한 팔로 지탱하고 몸을 일직선으로 들어 올림. 실측: 어깨선이 수평에서 71~75°, 몸 일직선 170~172°
+    pose: (f) => f.shRoll > 40 && f.bodyLine > 150 && f.torsoTilt > 55 && f.torsoTilt < 110 && f.hip > 150,
+    still: (w) => R(w, 'hip') < 15 && R(w, 'torsoTilt') < 12,
+    form: (w) => [
+      ['sag', M(w, 'hip') < 160, '엉덩이 올리기', '엉덩이가 내려갔어요. 몸을 일직선으로 들어 올리세요'],
     ],
   },
 
@@ -416,6 +646,7 @@ export const EXERCISES = [
       ['엎드려 팔로 지탱', and(gt(M(w, 'torsoTilt'), 60), gt(P(w, 'shoulderOverWrist', 10), 0.3)), 'core'],
       ['팔은 편 채 유지(푸시업 아님)', lt(R(w, 'shoulderOverWrist'), 0.1), 'core'],
       ['무릎을 가슴 쪽으로 당김', lt(P(w, 'kneeMin', 10), 95)],
+      ['반대 다리는 편 채(네발 자세 동키킥 아님)', gt(P(w, 'hipMax', 10), 125), 'soft'],
     ],
   },
   {
@@ -426,6 +657,9 @@ export const EXERCISES = [
     check: (w, b, rep) => [
       ['서 있다가', gt(rep.top, 0.55), 'core'],
       ['바닥까지 엎드림', and(lt(rep.bottom, 0.3), gt(P(w, 'torsoTilt', 90), 60)), 'core'],
+      // 실측: 버피는 엎드린 구간에서 팔로 몸을 받침(0.44~0.46m, 바닥에선 푸시업으로 0.15까지 내려감).
+      // 레그 컬 기구에 천천히 엎드리는 준비 동작·손 클로즈업(뒤집힌 자세로 오검출)과 구분
+      ['엎드려 팔로 몸을 받침(기구에 엎드리기 아님)', and(gt(P(w, 'shoulderOverWrist', 90), 0.3), lt(P(w, 'torsoTilt', 90), 125))],
     ],
   },
   {
@@ -438,6 +672,19 @@ export const EXERCISES = [
       ['팔을 가슴 높이까지 흔들어 올림', gt(P(w, 'wristH', 90), -0.25), 'core'],
       ['끝까지 일어섬', lt(P(w, 'torsoTilt', 10), 30)],
       ['무릎은 조금만 굽힘(스쿼트 아님)', gt(P(w, 'knee', 10), 95)],
+    ],
+  },
+  {
+    id: 'highknees', name: '하이니', group: '유산소', unit: '회', kind: 'reps', priority: 6, verified: false,
+    tip: '정면이나 옆에서 머리~발끝이 보이게',
+    // 제자리에서 무릎을 번갈아 높이 — 한쪽 1회
+    // 실측: 한 번 0.4~0.9초(사이드 런지·불가리안은 2초 안팎), 발은 몸 아래(좌우 0.25m·앞뒤 간격 작음)
+    signal: (f) => f.hipMin, prom: 35, minDur: 0.15, maxDur: 1.2,
+    check: (w, b) => [
+      ['서서 하는 동작', lt(M(w, 'torsoTilt'), 35), 'core'],
+      ['무릎을 높이 듦', lt(P(w, 'hipMin', 10), 115), 'core'],
+      ['다리를 번갈아(스쿼트 아님)', gt(P(w, 'kneeAsym', 90), 40)],
+      ['발은 몸 아래(런지 아님)', and(lt(M(b, 'stanceW'), 0.45), lt(M(b, 'stanceD'), 0.4))],
     ],
   },
 ];

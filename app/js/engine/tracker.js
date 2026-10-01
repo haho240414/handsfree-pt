@@ -14,6 +14,7 @@ export const TRACKER_DEFAULTS = {
   idleFactor: 2.2,  // 세트 종료: 마지막 반복 후 (반복 간격 중앙값 × factor)초 동안 반복이 없으면
   idleMin: 3.5,
   idleMax: 12,
+  idleSec: null,    // 사용자가 정한 '멈추면 세트 끝' 초 (null = 위의 자동 계산)
   lostEnd: 4,       // 사람이 화면에서 사라진 채 이만큼 지나면 세트 종료
   minSetReps: 2,    // 이보다 적은 세트는 기록하지 않음
   holdStart: 2.5,   // 플랭크 자세가 이만큼(초) 움직임 없이 유지되면 시작
@@ -42,9 +43,10 @@ export class Tracker {
     this.o = { ...TRACKER_DEFAULTS, ...opts };
     if (!this.o.fixed && this.o.candidates?.length === 1) this.o.fixed = this.o.candidates[0];
     const allow = this.o.fixed ? [this.o.fixed] : this.o.candidates;
-    this.specs = EXERCISES.filter((e) => !allow?.length || allow.includes(e.id));
+    // auto: false 운동(벽 스쿼트처럼 쉬는 자세와 구별이 안 되는 것)은 직접 골랐을 때만 본다
+    this.specs = EXERCISES.filter((e) => (allow?.length ? allow.includes(e.id) : e.auto !== false));
     this.repSpecs = this.specs.filter((e) => e.kind === 'reps').sort((a, b) => b.priority - a.priority);
-    this.holdSpec = this.specs.find((e) => e.kind === 'hold') || null;
+    this.holdSpecs = this.specs.filter((e) => e.kind === 'hold');
     this.counters = Object.fromEntries(this.repSpecs.map((e) => [e.id, new RepCounter(e)]));
     this.smoother = new FeatureSmoother(SMOOTH_KEYS, this.o.smoothTau);
     this.buf = [];
@@ -58,6 +60,7 @@ export class Tracker {
     this.lastF = null;
     this.holdSince = null;
     this.holdLastOk = null;
+    this.holdId = null;      // 지금 버티는 것 같은 자세 (플랭크·사이드 플랭크·벽 스쿼트)
     this.t = 0;
     this.up = REF_UP.slice(); // 선 자세 몸 축 추정 (처음엔 '평소 모습' = 폰을 똑바로 세웠다고 가정)
     this.rot = null;        // null = 보정 없음 (측정한 선 자세 축 → 평소 모습으로 돌리는 회전)
@@ -153,7 +156,7 @@ export class Tracker {
         const rep = this.counters[ex.id].update(t, ex.signal(f));
         if (rep) this._candidate(ex, rep, ev);
       }
-      if (this.holdSpec) this._hold(t, f, ev);
+      if (this.holdSpecs.length) this._hold(t, f, ev);
       if (this.state === 'reps') this._tempo(ev, false);
     }
     this._maybeEndSet(t, ev);
@@ -276,49 +279,50 @@ export class Tracker {
   }
 
   _hold(t, f, ev) {
-    const spec = this.holdSpec;
-    const pose = !!spec.pose(f);
     if (this.state === 'hold') {
       const s = this.set;
-      if (pose) {
+      if (EXERCISE_BY_ID[s.exercise].pose(f)) {
         s.lastOkT = t;
         s.holdSec = t - s.startT;
         const sec = Math.floor(s.holdSec);
         if (sec > s.tick) {
           s.tick = sec;
-          ev.push({ type: 'holdTick', exercise: spec.id, sec, t });
+          ev.push({ type: 'holdTick', exercise: s.exercise, sec, t });
           this._holdForm(t, ev);
         }
       }
       return;
     }
-    // 시작 판정: 자세 + 최근 1.2초 동안 움직임 없음 (푸시업 반복 중엔 '움직임'이라 시작 안 됨)
-    const ok = pose && spec.still(this._window(t - 1.2, t));
-    if (ok) {
-      if (this.holdSince == null) this.holdSince = t;
+    // 시작 판정: 버티기 자세 중 하나 + 최근 1.2초 동안 움직임 없음 (푸시업 반복 중엔 '움직임'이라 시작 안 됨)
+    const win = this._window(t - 1.2, t);
+    const spec = this.holdSpecs.find((h) => h.pose(f) && h.still(win)) || null;
+    if (spec) {
+      if (this.holdId !== spec.id || this.holdSince == null) { this.holdId = spec.id; this.holdSince = t; }
       this.holdLastOk = t;
     } else if (this.holdSince != null && t - this.holdLastOk > 0.5) {
       this.holdSince = null;
+      this.holdId = null;
     }
     if (this.holdSince == null || t - this.holdSince < this.o.holdStart) return;
     if (this.state === 'reps') {
-      if (this.set.lastRepT > this.holdSince) return; // 버티는 중에 반복이 있었다 → 플랭크 아님
+      if (this.set.lastRepT > this.holdSince) return; // 버티는 중에 반복이 있었다 → 버티기 아님
       this._endSet(ev, 'switch');
     }
+    const hs = EXERCISE_BY_ID[this.holdId];
     const holdSec = t - this.holdSince;
     this.state = 'hold';
     this.set = {
-      exercise: spec.id, kind: 'hold', startT: this.holdSince, holdSec, lastOkT: t, tick: Math.floor(holdSec),
+      exercise: hs.id, kind: 'hold', startT: this.holdSince, holdSec, lastOkT: t, tick: Math.floor(holdSec),
       issueSince: {}, issueSec: {}, cuedAt: {},
     };
     this.valid = {};
-    ev.push({ type: 'setStart', exercise: spec.id, holdSec, t });
+    ev.push({ type: 'setStart', exercise: hs.id, holdSec, t });
   }
 
   // 버티는 동안 1초마다 자세 확인 → 2초 이상 계속된 문제만, 같은 말은 8초 간격
   _holdForm(t, ev) {
-    const spec = this.holdSpec;
     const s = this.set;
+    const spec = EXERCISE_BY_ID[s.exercise];
     if (!spec.form) return;
     const rows = spec.form(this._window(t - 1.5, t), []);
     for (const [code, bad, text, tip] of rows) {
@@ -346,15 +350,26 @@ export class Tracker {
       }
       return;
     }
+    const idle = this._idleSec();
+    const lost = !this.present && t - this.lastSeenT > this.o.lostEnd;
+    if (lost || (!this._midRep() && t - s.lastRepT > idle)) this._endSet(ev, lost ? 'lost' : 'idle');
+  }
+
+  /** 반복이 이만큼(초) 멈추면 세트 끝: 사용자가 정했으면 그 값, 아니면 평소 반복 간격의 2.2배(3.5~12초) */
+  _idleSec() {
+    if (this.o.idleSec) return this.o.idleSec;
+    const s = this.set;
     const gaps = [];
     for (let i = 1; i < s.reps.length; i++) gaps.push(s.reps[i].tEnd - s.reps[i - 1].tEnd);
     const period = gaps.length ? median(gaps) : 2.5;
-    const idle = Math.min(this.o.idleMax, Math.max(this.o.idleMin, period * this.o.idleFactor));
-    const ex = EXERCISE_BY_ID[s.exercise];
+    return Math.min(this.o.idleMax, Math.max(this.o.idleMin, period * this.o.idleFactor));
+  }
+
+  // 내려간(힘주는) 자세로 버티는 중이면 세트를 끝내지 않는다 (예: 스쿼트 바닥에서 잠깐 멈춤)
+  _midRep() {
+    const s = this.set;
     const c = this.counters[s.exercise];
-    const midRep = c.mode === 'valley' && c.peak && t - c.peak.t < ex.maxDur; // 내려간 채 버티는 중
-    const lost = !this.present && t - this.lastSeenT > this.o.lostEnd;
-    if (lost || (!midRep && t - s.lastRepT > idle)) this._endSet(ev, lost ? 'lost' : 'idle');
+    return c.mode === 'valley' && c.peak && this.t - c.peak.t < EXERCISE_BY_ID[s.exercise].maxDur;
   }
 
   _endSet(ev, reason) {
@@ -389,7 +404,7 @@ export class Tracker {
     this.state = 'search';
     this.set = null;
     this.valid = {};
-    if (s.kind === 'hold') this.holdSince = null;
+    if (s.kind === 'hold') { this.holdSince = null; this.holdId = null; }
     for (const c of Object.values(this.counters)) c.clearAdapt();
   }
 
@@ -415,6 +430,9 @@ export class Tracker {
       raw: this.lastRaw,
       tiltDeg: this.tiltDeg,
       pending: this._pending(),
+      // 반복 세트 중 '몇 초 더 멈추면 세트 끝'인지 (화면 안내용)
+      setEndIn: s?.kind === 'reps' && !this._midRep() ? Math.max(0, this._idleSec() - (this.t - s.lastRepT)) : null,
+      idleSec: s?.kind === 'reps' ? this._idleSec() : null,
       tempo: s?.kind === 'reps' ? s.reps.map((r) => r.tempo ?? null) : null,
     };
   }

@@ -249,6 +249,9 @@ input[type="number"], input[type="text"], select, textarea {
   display: inline-block; margin-top: 12px; padding: 10px 18px; border-radius: 999px;
   background: #ffb020; color: #1a1200; font-weight: 800; font-size: clamp(20px, 5.6vw, 34px); text-shadow: none;
 }
+.wo-rest-actions { display: flex; gap: 10px; justify-content: center; margin-top: 14px; pointer-events: auto; text-shadow: none; }
+.wo-rest-actions[hidden] { display: none; }
+.wo-rest-actions .wo-btn { height: 46px; padding: 0 18px; font-size: 16px; }
 .wo-bottom {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
   padding: 26px 14px calc(14px + var(--safe-b));
@@ -334,6 +337,14 @@ textarea { width: 100%; resize: vertical; min-height: 72px; line-height: 1.4; }
 .chip {
   border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; font-size: 14px;
 }
+.setting.stacked .seg { flex-wrap: wrap; max-width: 100%; }
+.rest-ctl, .cam-ctl { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin-top: 6px; }
+.rest-ctl { align-items: stretch; }
+.rest-ctl .stepper { justify-content: flex-start; }
+.setting.stacked .seg button { white-space: nowrap; padding: 6px 4px; }
+.rest-ctl .stepper { gap: 10px; }
+.rest-val { min-width: 76px; text-align: center; font-size: 18px; font-variant-numeric: tabular-nums; }
+.cam-ctl .chips { margin: 0; }
 .chip[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 700; }
 
 .calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }

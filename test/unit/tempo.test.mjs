@@ -121,3 +121,22 @@ test('추적기: 자동 인식 1회째에 "스쿼트 같아요"(확정 전 후�
   const order = [...new Set(seen)];
   assert.deepEqual(order, ['search', 'pending:squat:1', 'reps:2']);
 });
+
+test('세트 끝 판정: 설정한 초만큼 멈추면 세트를 끝내고, 그보다 짧게 쉬면 같은 세트로 이어간다', () => {
+  const run = (idleSec, pause) => {
+    const rnd = seeded(9);
+    const tr = new Tracker({ idleSec });
+    let t = 0;
+    const feed = (squat) => { const p = standingPose({ squat, jitter: 0.008, rnd }); tr.update(t, p.lm, p.wl); t += 1 / FPS; };
+    const reps = (n) => { for (let r = 0; r < n; r++) for (let i = 0; i < 2.4 * FPS; i++) feed(Math.sin((Math.PI * i) / (2.4 * FPS)) ** 2); };
+    for (let i = 0; i < 2 * FPS; i++) feed(0);
+    reps(4);
+    for (let i = 0; i < pause * FPS; i++) feed(0);
+    reps(4);
+    for (let i = 0; i < 20 * FPS; i++) feed(0);
+    tr.finish();
+    return tr.sets.map((s) => s.reps);
+  };
+  assert.deepEqual(run(3, 6), [4, 4], '3초로 정하면 6초 쉰 곳에서 세트가 나뉜다');
+  assert.deepEqual(run(10, 6), [8], '10초로 정하면 6초 쉬어도 한 세트');
+});

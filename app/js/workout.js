@@ -7,6 +7,7 @@ import { createPoseLandmarker, BONES, JOINTS } from './pose.js';
 import { Voice, nativeKorean } from './voice.js';
 import { TiltSensor } from './tilt.js';
 import { DiagRecorder } from './diag.js';
+import { openCamera, widenCamera } from './camera.js';
 import * as store from './store.js';
 
 const $ = (id) => document.getElementById(id);
@@ -43,7 +44,21 @@ export class Workout {
       sets: $('wo-sets'), debug: $('wo-debug'), loading: $('wo-loading'), loadingText: $('wo-loading-text'),
       voiceBtn: $('btn-voice'), endBtn: $('btn-end'),
       tempo: $('wo-tempo'), tempoText: $('wo-tempo-text'), tempoCanvas: $('wo-tempo-canvas'), bottom: $('wo-bottom'),
+      restActions: $('wo-rest-actions'),
     };
+    // 휴식 중: 30초 늘리기 / 바로 끝내기
+    $('btn-rest-plus').addEventListener('click', () => {
+      if (!this.restUntil) return;
+      this.restUntil += 30000;
+      this.restSaid = new Set(); // 늘린 만큼 알림을 다시
+      this._hud();
+    });
+    $('btn-rest-skip').addEventListener('click', () => {
+      if (!this.restUntil) return;
+      this.restUntil = 0;
+      this.voice.say('다음 세트를 시작하세요.', { interrupt: true });
+      this._hud();
+    });
     this.el.endBtn.addEventListener('click', () => this.end());
     this.el.voiceBtn.addEventListener('click', () => {
       this.voice.enabled = !this.voice.enabled;
@@ -64,10 +79,12 @@ export class Workout {
     this.voice.unlock(); // 시작 버튼 탭 안에서 소리 잠금 해제
     if (!source) this.tilt.start(); // 폰 기울기 센서 (iOS 는 이 탭 안에서 권한을 물어야 함)
     this.el.voiceBtn.textContent = this.voice.enabled ? '🔊' : '🔇';
-    this.cfg = { cues: st.cues, rest: st.rest, debug: st.debug };
+    // 저장값이 깨져 있어도(옛 백업 등) 멈추지 않게 숫자 배열로 맞춘다
+    const alerts = [].concat(st.restAlerts ?? [10]).map(Number).filter((n) => n > 0);
+    this.cfg = { cues: st.cues, rest: Number(st.rest) || 0, debug: st.debug, restAlerts: alerts };
     this.isFile = !!source;
     this.el.screen.hidden = false;
-    this.el.screen.classList.toggle('mirror', st.mirror && !source);
+    this.el.screen.classList.toggle('mirror', st.mirror && !source); // 후면 카메라면 카메라를 연 뒤 끈다
     document.body.classList.add('in-workout');
     this.el.debug.hidden = !st.debug;
     this.el.loading.hidden = false;
@@ -84,7 +101,7 @@ export class Workout {
       mode: candidates?.length ? 'pick' : 'auto', candidates: candidates || null,
       source: source ? 'video' : 'camera',
     };
-    this.tracker = new Tracker({ candidates, lockReps: st.lockReps });
+    this.tracker = new Tracker({ candidates, lockReps: st.lockReps, idleSec: st.setEndSec || null });
     this.setCount = {};
     this.restUntil = 0;
     this.greeted = false;
@@ -108,7 +125,7 @@ export class Workout {
     }
 
     try {
-      await this._openSource(source);
+      await this._openSource(source, st);
       const key = `${st.model}-${st.gpu ? 'auto' : 'CPU'}`;
       if (st.gpu && !landmarkers[key]) guard('starting');
       landmarkers[key] ||= await createPoseLandmarker({
@@ -117,7 +134,7 @@ export class Workout {
         onStatus: (s) => { this.el.loadingText.textContent = s; },
       });
       this.landmarker = landmarkers[key];
-      this.diag.event(0, 'ready', { delegate: this.landmarker?.delegate ?? null, video: [this.el.video.videoWidth, this.el.video.videoHeight] });
+      this.diag.event(0, 'ready', { delegate: this.landmarker?.delegate ?? null, video: [this.el.video.videoWidth, this.el.video.videoHeight], camera: this.camInfo ?? null });
     } catch (e) {
       console.error(e);
       if (this.session) this._fail(e);
@@ -135,7 +152,7 @@ export class Workout {
     if (!this.isFile) this.voice.say('준비됐어요. 전신이 보이게 뒤로 가 주세요.');
   }
 
-  async _openSource(source) {
+  async _openSource(source, st = store.settings()) {
     const v = this.el.video;
     v.muted = true;
     v.playsInline = true;
@@ -149,10 +166,10 @@ export class Workout {
       if (!window.isSecureContext) throw Object.assign(new Error('insecure'), { name: 'InsecureContext' });
       if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('nocam'), { name: 'NotSupportedError' });
       this.el.loadingText.textContent = '카메라 켜는 중…';
-      this.stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      });
+      this.stream = await openCamera(st);
+      this.camInfo = await widenCamera(this.stream, st.cameraWide);
+      // 거울 보기는 나를 비추는(전면) 카메라일 때만
+      this.el.screen.classList.toggle('mirror', !!st.mirror && this.camInfo.facing !== 'environment');
       v.removeAttribute('src');
       v.srcObject = this.stream;
       v.onended = null;
@@ -323,7 +340,7 @@ export class Workout {
     let msg = `${exName(s.exercise)} ${what}. ${this.setCount[s.exercise]}세트 완료.`;
     if (this.cfg.rest > 0 && !this.isFile) {
       this.restUntil = performance.now() + this.cfg.rest * 1000;
-      this.restWarned = false;
+      this.restSaid = new Set();
       msg += ` ${this.cfg.rest}초 쉬세요.`;
     }
     this.voice.say(msg);
@@ -344,13 +361,26 @@ export class Workout {
     this._setText('clock', fmtClock(elapsed));
     if (this.restUntil) {
       const left = (this.restUntil - now) / 1000;
-      if (left <= 10 && !this.restWarned) {
-        this.restWarned = true;
-        this.voice.say('10초 남았어요');
+      for (const a of this.cfg.restAlerts) {
+        if (a === 3) continue;
+        if (left <= a && left > a - 2 && !this.restSaid.has(a)) {
+          this.restSaid.add(a);
+          this.voice.beep(880, 0.08);
+          this.voice.say(a >= 60 ? `${a / 60}분 남았어요` : `${a}초 남았어요`);
+        }
+      }
+      if (this.cfg.restAlerts.includes(3)) {
+        for (const [n, word] of [[3, '셋'], [2, '둘'], [1, '하나']]) {
+          if (left <= n && left > n - 1 && !this.restSaid.has(`c${n}`)) {
+            this.restSaid.add(`c${n}`);
+            this.voice.beep(n === 1 ? 990 : 880, 0.07);
+            this.voice.say(word, { interrupt: true });
+          }
+        }
       }
       if (left <= 0) {
         this.restUntil = 0;
-        this.voice.beep(660, 0.15);
+        this.voice.beep(660, 0.25);
         this.voice.say('휴식 끝. 다음 세트를 시작하세요.');
       }
       this._hud();
@@ -384,12 +414,16 @@ export class Workout {
     if (!active) this._sayFraming(frame, now);
 
     const count = this.el.count;
+    this.el.restActions.hidden = !(this.restUntil && !active && !snap.pending);
     if (active) {
       const no = (this.setCount[snap.exercise] || 0) + 1;
       this._setText('exercise', `${exName(snap.exercise)} · ${no}세트`);
       this._setText('count', snap.state === 'hold' ? `${Math.floor(snap.holdSec)}초` : String(snap.count));
       count.classList.remove('rest', 'tentative');
-      this._setText('message', snap.present ? '' : message);
+      // 멈춘 지 1.5초가 넘으면 '몇 초 더 멈추면 이 세트를 기록'하는지 보여준다 (설정 → 세트 끝 판정)
+      const left = snap.setEndIn;
+      const hint = left != null && snap.idleSec - left > 1.5 && left > 0 ? `${Math.ceil(left)}초 더 쉬면 세트 기록` : '';
+      this._setText('message', snap.present ? hint : message);
     } else if (snap.pending) {
       // 자동 인식: 1회째는 아직 확정 전 — 알아챘다는 걸 바로 보여준다
       const left = this.tracker.o.lockReps - snap.pending.count;
@@ -571,8 +605,10 @@ export class Workout {
     const recent = this.tracker.log.slice(-4).map((c) =>
       `${c.valid ? '✔' : '·'} ${c.ex} ${n(c.amp, 2)} ${c.failed.join('/')}`).join('\n');
     const pitch = this.tilt.pitchDeg();
+    const cam = this.camInfo;
     this.el.debug.textContent =
       `모델 ${this.landmarker?.delegate ?? ''} ${this.fps}fps · 상태 ${snap.state}\n`
+      + (cam ? `카메라 ${cam.facing || '?'} ${cam.width}×${cam.height}${cam.zoom != null ? ` 줌 ${cam.zoom}` : ''}\n` : '')
       + `폰 기울기 ${pitch == null ? '센서 없음' : `${n(pitch)}°(보정 ${n(snap.tiltDeg)}°)`}\n`
       + `무릎 ${n(f.knee)} 엉덩이 ${n(f.hip)} 팔꿈치 ${n(f.elbow)} 몸통 ${n(f.torsoTilt)}\n`
       + `엉덩이높이 ${n(f.hipH, 2)} 손목높이 ${n(f.wristH, 2)} 가시성 ${n(f.visAll, 2)}\n${recent}`;
@@ -596,8 +632,11 @@ export class Workout {
     const W = Math.round(c.clientWidth * dpr), H = Math.round(c.clientHeight * dpr);
     if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
     const g = c.getContext('2d');
-    // 화면을 꽉 채우도록(cover) 영상 프레임을 그리고 그 위에 뼈대를 그린다
-    const scale = Math.max(W / v.videoWidth, H / v.videoHeight);
+    // AI 가 보는 프레임 전체를 잘리지 않게(contain) 그리고 그 위에 뼈대를 그린다
+    // (꽉 채우면 화면엔 안 보이는 부분을 AI 는 보고 있어서 '화면 안에 다 들어왔는지' 판단이 어긋난다)
+    const scale = Math.min(W / v.videoWidth, H / v.videoHeight);
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, W, H);
     const ox = (W - v.videoWidth * scale) / 2, oy = (H - v.videoHeight * scale) / 2;
     g.drawImage(v, ox, oy, v.videoWidth * scale, v.videoHeight * scale);
     if (!lm) return;

@@ -82,6 +82,13 @@ const model = await stage('AI 모델(CPU)', `(async () => {
 })()`, 180000);
 shot('2_after_model');
 
+// 참고 단계: 앱(WebView) 안에서 보이는 카메라 목록과 광각(줌 1배 미만)·4:3 지원 여부
+const cams = await stage('카메라 목록', `(async () => {
+  const cam = await import('./js/camera.js');
+  const list = await cam.listCameras();
+  return { names: cam.cameraNames(list), raw: list.map((c) => ({ label: c.label, facing: c.facing, zoomMin: c.zoomMin, max: [c.maxW, c.maxH] })) };
+})()`, 60000);
+
 // 참고 단계: 카메라로 운동 화면 (에뮬레이터 가상 카메라, CPU 호환 모드)
 const cam = await stage('카메라 운동 화면', `(async () => {
   window.__hfpt.store.setSetting('gpu', false);
@@ -95,7 +102,7 @@ const cam = await stage('카메라 운동 화면', `(async () => {
       status: document.getElementById('wo-status-text').innerText,
       video: [document.getElementById('cam').videoWidth, document.getElementById('cam').videoHeight],
       // 앱(WebView) 안에서 기울기 센서 값이 실제로 들어오는지 (에뮬레이터 가상 가속도계)
-      tiltRaw: w.tilt.g ? w.tilt.g.map((v) => +v.toFixed(2)) : null, pitch: w.tilt.pitchDeg() };
+      tiltRaw: w.tilt.g ? w.tilt.g.map((v) => +v.toFixed(2)) : null, pitch: w.tilt.pitchDeg(), camera: w.camInfo ?? null };
     if (s.running && s.fps > 0 && i >= 4) break;
   }
   return s;
@@ -117,6 +124,7 @@ report.required = required;
 report.cameraOk = !!(cam?.running && cam?.fps > 0);
 report.backOk = back ? back.stillInWorkout === true : null;
 report.tiltOk = cam ? cam.tiltRaw != null : null;
+report.cameras = cams?.names ?? null;
 save();
 console.log(`필수 점검 ${required ? '통과' : '실패'} · 카메라 ${report.cameraOk ? '동작' : '확인 안 됨'} · 뒤로가기 ${report.backOk} · 기울기 센서 ${report.tiltOk ? `${cam.pitch?.toFixed?.(1) ?? '-'}°` : '값 없음'}`);
 try { ws.close(); } catch { /* 무시 */ }

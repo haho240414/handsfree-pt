@@ -251,5 +251,253 @@
   "conf": "robust",
   "view": "1회뿐인 짧은 영상",
   "split": "dev"
+ },
+ "legpress_puregym": {
+  "exercise": "legpress",
+  "reps": 2,
+  "conf": "mid",
+  "view": "측면·45도 기구(처음 2초 관절 튐)",
+  "split": "dev"
+ },
+ "legext_puregym": {
+  "exercise": "legext",
+  "reps": 4,
+  "conf": "high",
+  "view": "대각선·기구",
+  "split": "dev"
+ },
+ "legcurl_puregym": {
+  "exercise": "legcurl",
+  "reps": 5,
+  "conf": "mid",
+  "view": "측면·엎드려 하는 기구·설명 후 34초부터·클로즈업 편집",
+  "split": "dev"
+ },
+ "seatedrow_puregym": {
+  "exercise": "seatedrow",
+  "reps": 5,
+  "conf": "mid",
+  "view": "대각선·케이블(마지막 1회는 당긴 채 끝남)",
+  "split": "dev"
+ },
+ "pushdown_puregym": {
+  "exercise": "pushdown",
+  "reps": null,
+  "conf": "robust",
+  "view": "대각선·케이블·클로즈업 편집",
+  "split": "dev"
+ },
+ "fly_puregym": {
+  "exercise": "fly",
+  "reps": 4,
+  "conf": "high",
+  "view": "대각선·누워서 덤벨(5번째는 벌리다 끝남)",
+  "split": "dev"
+ },
+ "pecdeck_puregym": {
+  "exercise": "fly",
+  "reps": 5,
+  "conf": "high",
+  "view": "정면·펙덱 기구",
+  "split": "dev"
+ },
+ "uprightrow_rp": {
+  "exercise": "uprightrow",
+  "reps": 4,
+  "conf": "high",
+  "view": "정면·덤벨",
+  "split": "dev"
+ },
+ "reversefly_aom": {
+  "exercise": "reversefly",
+  "reps": null,
+  "conf": "robust",
+  "view": "좋은 예/나쁜 예 화면 분할·정지 화면",
+  "split": "dev"
+ },
+ "hanglegraise_puregym": {
+  "exercise": "hanglegraise",
+  "reps": 4,
+  "conf": "high",
+  "view": "정면",
+  "split": "dev"
+ },
+ "sidelunge_medstar": {
+  "exercise": "sidelunge",
+  "reps": 6,
+  "conf": "mid",
+  "view": "정면·좌우 번갈아",
+  "split": "dev"
+ },
+ "bulgarian_activelife": {
+  "exercise": "bulgarian",
+  "reps": null,
+  "conf": "robust",
+  "view": "대각선·설명이 길고 끝까지 한 반복은 1회뿐(2회째는 올라오다 끝남)",
+  "split": "dev"
+ },
+ "kneepushup_leap": {
+  "exercise": "pushup",
+  "reps": null,
+  "conf": "robust",
+  "view": "무릎 푸시업·두 사람·여러 각도 편집",
+  "split": "dev"
+ },
+ "russian_larsen": {
+  "exercise": "russian",
+  "reps": 9,
+  "conf": "mid",
+  "view": "대각선·덤벨(좌우 1회씩)",
+  "split": "dev"
+ },
+ "bicycle_wodstar": {
+  "exercise": "bicycle",
+  "reps": 5,
+  "conf": "mid",
+  "view": "측면·4초뿐(좌우 1회씩)",
+  "split": "dev"
+ },
+ "sideplank_nasm": {
+  "exercise": "sideplank",
+  "reps": null,
+  "hold": 11,
+  "conf": "mid",
+  "view": "정면",
+  "split": "dev"
+ },
+ "wallsit_fb": {
+  "exercise": "wallsit",
+  "reps": null,
+  "hold": 15,
+  "conf": "mid",
+  "view": "정면→대각선→측면(골라서만)",
+  "split": "dev"
+ },
+ "donkey_nuffield": {
+  "exercise": "donkey",
+  "reps": null,
+  "conf": "robust",
+  "view": "측면·6.5초 뒤 뒤에 트레이너가 같이 잡힘",
+  "split": "dev"
+ },
+ "pushdown_rp": {
+  "exercise": "pushdown",
+  "reps": 4,
+  "conf": "high",
+  "view": "대각선·케이블 바",
+  "split": "holdout"
+ },
+ "cablefly_rp": {
+  "exercise": "fly",
+  "reps": 4,
+  "conf": "high",
+  "view": "정면·케이블 크로스오버(벌린 채 시작)",
+  "split": "holdout"
+ },
+ "fly_rp": {
+  "exercise": "fly",
+  "reps": 4,
+  "conf": "mid",
+  "view": "발 쪽 대각선·누워서 덤벨(마지막은 페이드아웃)",
+  "split": "holdout"
+ },
+ "seatedrow_rp": {
+  "exercise": "seatedrow",
+  "reps": 5,
+  "conf": "mid",
+  "view": "대각선·케이블(마지막은 당긴 채 끝남)",
+  "split": "holdout"
+ },
+ "wallsit_e3": {
+  "exercise": "wallsit",
+  "reps": null,
+  "hold": 6,
+  "conf": "mid",
+  "view": "정면(골라서만)",
+  "split": "holdout"
+ },
+ "reversefly_atomic": {
+  "exercise": "reversefly",
+  "reps": 8,
+  "conf": "mid",
+  "view": "측면 3회 → 정면 5회(화면 전환)",
+  "split": "holdout"
+ },
+ "bulgarian_denvyr": {
+  "exercise": "bulgarian",
+  "reps": 3,
+  "conf": "mid",
+  "view": "측면·자세 잡기 설명(무릎 내려 거리 재기·덤벨 줍기) 후 3회",
+  "split": "holdout"
+ },
+ "sidelunge_mgh": {
+  "exercise": "sidelunge",
+  "reps": 9,
+  "conf": "high",
+  "view": "정면·좌우 번갈아·뒤에 다른 사람",
+  "split": "holdout"
+ },
+ "bicycle_medbridge": {
+  "exercise": "bicycle",
+  "reps": 10,
+  "conf": "mid",
+  "view": "측면 6회 → 위 대각선 약 4회(화면 전환)",
+  "split": "holdout"
+ },
+ "russian_leap": {
+  "exercise": "russian",
+  "reps": 37,
+  "conf": "mid",
+  "view": "두 사람·세 구간 편집(좌우 1회씩, 가운데 구간은 화면으로 확인)",
+  "split": "holdout"
+ },
+ "legext_jeet": {
+  "exercise": "legext",
+  "reps": null,
+  "conf": "robust",
+  "view": "설명 영상 61초",
+  "split": "holdout"
+ },
+ "hanglegraise_cooper": {
+  "exercise": "hanglegraise",
+  "reps": null,
+  "conf": "robust",
+  "view": "설명 영상 44초",
+  "split": "holdout"
+ },
+ "legcurl_bb": {
+  "exercise": "legcurl",
+  "reps": null,
+  "conf": "robust",
+  "view": "설명 영상 51초(사람 인식 절반)",
+  "split": "holdout"
+ },
+ "legpress_goodlife": {
+  "exercise": "legpress",
+  "reps": null,
+  "conf": "robust",
+  "view": "설명 영상 51초",
+  "split": "holdout"
+ },
+ "sideplank_ccg": {
+  "exercise": "sideplank",
+  "reps": null,
+  "conf": "robust",
+  "view": "설명 영상 39초",
+  "split": "holdout"
+ },
+ "reversefly_runna": {
+  "exercise": "reversefly",
+  "reps": null,
+  "conf": "robust",
+  "view": "설명 영상 37초",
+  "split": "holdout"
+ },
+ "highknees_xhit": {
+  "exercise": "highknees",
+  "reps": null,
+  "conf": "robust",
+  "view": "55초·빠름",
+  "split": "holdout"
  }
 }

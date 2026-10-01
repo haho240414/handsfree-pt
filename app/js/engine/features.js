@@ -255,8 +255,52 @@ export function computeFeatures(lm, wl) {
     f.torsoFrac = Math.hypot(sx - hx, sy - hy);
   } else f.torsoFrac = NaN;
   // 부위별로 화면에 보이는지 (안내 문구용)
-  const seen = (...idx) => Math.max(...idx.map((i) => vis(lm[i]))) >= VIS_MIN;
-  f.seen = { head: seen(0), hands: seen(15, 16), knees: seen(25, 26), feet: seen(27, 28) };
+  const seen = (...idx) => Math.max(...idx.map((i) => vis(lm[i])));
+  f.seen = { head: seen(0) >= VIS_MIN, hands: seen(15, 16) >= VIS_MIN, knees: seen(25, 26) >= VIS_MIN, feet: seen(27, 28) >= VIS_MIN };
+
+  // ── 2차 운동(기구·홈트)용 ──
+  f.hipMax = hip.max; // 한 다리만 뒤로 차는 동작(동키킥)은 펴진 쪽
+  // 좌우 무릎 굽힘 차이: 사이드 런지·바이시클 크런치는 한쪽만 굽힌다(스쿼트는 양쪽이 같이)
+  f.kneeAsym = Number.isFinite(knee.L) && Number.isFinite(knee.R) ? Math.abs(knee.L - knee.R) : NaN;
+  // 발 간격을 '몸 기준'으로: 골반 좌우 방향(stanceW, 사이드 런지·와이드 스쿼트)과 앞뒤 방향(stanceD, 런지·스플릿 스쿼트)
+  const hAx = norm([hL.x - hR.x, 0, hL.z - hR.z]);
+  const hipVis = minVis(lm, L.L_HIP, L.R_HIP);
+  if (hAx && hipVis >= 0.3 && ankleVisBoth >= 0.3) {
+    const A = [wl[L.L_ANKLE].x - wl[L.R_ANKLE].x, 0, wl[L.L_ANKLE].z - wl[L.R_ANKLE].z];
+    f.stanceW = Math.abs(dot(A, hAx));
+    f.stanceD = Math.abs(dot(A, [-hAx[2], 0, hAx[0]]));
+  } else {
+    f.stanceW = NaN;
+    f.stanceD = NaN;
+  }
+  // 두 발목 높이 차(m): 불가리안 스플릿 스쿼트는 뒷발을 벤치에 올린다
+  f.ankleYDiff = ankleVisBoth >= 0.3 ? Math.abs(wl[L.L_ANKLE].y - wl[L.R_ANKLE].y) : NaN;
+  // 두 손목 사이 3D 거리(m): 플라이(모으기·벌리기)는 보는 방향과 상관없이 이걸로
+  f.wristDist = wristVisBoth >= 0.3
+    ? Math.hypot(wl[L.L_WRIST].x - wl[L.R_WRIST].x, wl[L.L_WRIST].y - wl[L.R_WRIST].y, wl[L.L_WRIST].z - wl[L.R_WRIST].z) : NaN;
+  // 어깨→손목 수평 거리(m): 로우는 손이 높이는 그대로 몸 쪽으로 당겨진다
+  const reach = sided(
+    Math.hypot(wl[L.L_WRIST].x - sL.x, wl[L.L_WRIST].z - sL.z), minVis(lm, L.L_SHOULDER, L.L_WRIST),
+    Math.hypot(wl[L.R_WRIST].x - sR.x, wl[L.R_WRIST].z - sR.z), minVis(lm, L.R_SHOULDER, L.R_WRIST));
+  f.reach = reach.avg;
+  // 손이 골반 중심에서 좌우로 얼마나 갔는지(m, 부호 있음): 러시안 트위스트
+  if (hAx && hipVis >= 0.3 && Math.max(vis(lm[L.L_WRIST]), vis(lm[L.R_WRIST])) >= 0.3) {
+    const wv = [vis(lm[L.L_WRIST]), vis(lm[L.R_WRIST])];
+    const wx = (wl[L.L_WRIST].x * wv[0] + wl[L.R_WRIST].x * wv[1]) / (wv[0] + wv[1]);
+    const wz = (wl[L.L_WRIST].z * wv[0] + wl[L.R_WRIST].z * wv[1]) / (wv[0] + wv[1]);
+    f.handSide = dot([wx - (hL.x + hR.x) / 2, 0, wz - (hL.z + hR.z) / 2], hAx);
+  } else f.handSide = NaN;
+  // 가슴이 향하는 방향의 위아래 성분: +1 = 천장(누움), -1 = 바닥(엎드림), 0 = 서 있음·옆으로 누움.
+  // 코 위치(noseDrop)는 크런치처럼 고개를 들면 틀어져서, 몸통 면의 방향으로 본다(왼어깨-오른어깨 × 엉덩이→어깨)
+  if (torsoVis >= VIS_MIN) {
+    const across = [sL.x - sR.x, sL.y - sR.y, sL.z - sR.z];
+    const along = [(sL.x + sR.x - hL.x - hR.x) / 2, (sL.y + sR.y - hL.y - hR.y) / 2, (sL.z + sR.z - hL.z - hR.z) / 2];
+    const fwd = norm(cross(across, along));
+    f.chestUp = fwd ? -fwd[1] : NaN;
+  } else f.chestUp = NaN;
+  // 어깨선이 수평에서 얼마나 섰는지(도): 사이드 플랭크는 어깨가 위아래로 포개진다(플랭크·서 있기는 0 근처)
+  const shLen = Math.hypot(sL.x - sR.x, sL.y - sR.y, sL.z - sR.z);
+  f.shRoll = torsoVis >= VIS_MIN && shLen ? Math.asin(Math.min(1, Math.abs(sL.y - sR.y) / shLen)) * DEG : NaN;
 
   return f;
 }
@@ -266,4 +310,5 @@ export const SMOOTH_KEYS = [
   'knee', 'kneeMin', 'kneeL', 'kneeR', 'hip', 'hipMin', 'elbow', 'elbowMin', 'elbowL', 'elbowR', 'arm', 'armMax', 'torsoTilt', 'hipH', 'hipHAbs', 'handH',
   'wristH', 'wristHMax', 'shoulderOverWrist', 'kneeYDiff', 'ankleDX', 'ankleDZ', 'wristDX',
   'kneeDX', 'frontal', 'bodyLine', 'hipSag', 'shY', 'heelLift', 'noseDrop', 'torsoFrac',
+  'hipMax', 'kneeAsym', 'stanceW', 'stanceD', 'ankleYDiff', 'wristDist', 'reach', 'handSide', 'shRoll', 'chestUp',
 ];

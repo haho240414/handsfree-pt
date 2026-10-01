@@ -50,6 +50,8 @@ if (debug) {
 }
 
 const score = { dev: { n: 0, exact: 0, within1: 0, err: 0 }, holdout: { n: 0, exact: 0, within1: 0, err: 0 } };
+const holdScore = { n: 0, ok: 0 };
+const holdSum = (sets, ex) => sets.filter((s) => s.exercise === ex && s.kind === 'hold').reduce((a, s) => a + (s.holdSec || 0), 0);
 let wrongTotal = 0;
 const rows = [];
 for (const [clip, t] of Object.entries(truth)) {
@@ -58,7 +60,9 @@ for (const [clip, t] of Object.entries(truth)) {
   if (!fx) { rows.push([clip, '(랜드마크 없음)']); continue; }
   const auto = run(fx);
   const fixed = run(fx, { fixed: t.exercise });
-  const autoReps = auto.sets.filter((s) => s.exercise === t.exercise).reduce((a, s) => a + (s.reps || 0), 0);
+  // 골라서만 재는 운동(auto: false)은 '직접 선택' 결과로 채점하고, 자동에선 아무것도 안 잡혀야 한다
+  const pickOnly = EXERCISE_BY_ID[t.exercise]?.auto === false;
+  const autoReps = (pickOnly ? fixed : auto).sets.filter((s) => s.exercise === t.exercise).reduce((a, s) => a + (s.reps || 0), 0);
   const fixedReps = fixed.sets.reduce((a, s) => a + (s.reps || 0), 0);
   const wrong = auto.sets.filter((s) => s.exercise !== t.exercise);
   let verdict = '';
@@ -72,6 +76,12 @@ for (const [clip, t] of Object.entries(truth)) {
     if (err <= 1) sc.within1++;
     verdict = err === 0 ? '정확' : err <= 1 ? '±1' : `오차 ${autoReps - t.reps}`;
     if (wrong.length) verdict += ' / 오인식 있음';
+  } else if (t.hold != null) {
+    const sec = holdSum((pickOnly ? fixed : auto).sets, t.exercise);
+    holdScore.n++;
+    const ok = Math.abs(sec - t.hold) <= 3;
+    if (ok) holdScore.ok++;
+    verdict = `${ok ? '±3초 이내' : '시간 틀림'}(${sec}초)${wrong.length ? ' / 오인식 있음' : ''}`;
   } else {
     verdict = wrong.length ? '오인식 있음' : '오작동 없음';
   }
@@ -83,4 +93,5 @@ for (const [k, sc] of Object.entries(score)) {
   if (!sc.n) continue;
   console.log(`${k === 'dev' ? '조정에 쓴 영상' : '처음 보는 영상'} ${sc.n}개: 정확 ${sc.exact}, ±1 이내 ${sc.within1}, 평균 절대오차 ${(sc.err / sc.n).toFixed(2)}회`);
 }
+if (holdScore.n) console.log(`버티기(시간) 영상 ${holdScore.n}개: ±3초 이내 ${holdScore.ok}`);
 console.log(`다른 운동으로 잘못 인식한 영상: ${wrongTotal}개`);

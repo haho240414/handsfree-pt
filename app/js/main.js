@@ -7,6 +7,7 @@ import { renderHistory } from './history.js';
 import { esc, exName, DAYS, fmtDate, fmtTime, minutes, setValue, sessionTotals, sessionLine, sessionItem } from './format.js';
 import { isNative, NativeApp, NativeTTS, canShareFile, shareTextFile, shareBinaryFile } from './native.js';
 import { summarize as tempoSummary, speeds as tempoSpeeds } from './engine/tempo.js';
+import { listCameras, cameraNames } from './camera.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -80,12 +81,12 @@ function renderPick() {
   const html = GROUPS.map((g) => {
     const items = EXERCISES.filter((e) => e.group === g).map((e) => `
       <button class="pick-item" data-pick="${e.id}" aria-pressed="${picked.has(e.id)}">
-        <div class="n">${esc(e.name)}${e.verified ? '' : ' <span class="beta">베타</span>'}</div><div class="h">📱 ${esc(e.tip)}</div>
+        <div class="n">${esc(e.name)}${e.verified ? '' : ' <span class="beta">베타</span>'}${e.auto === false ? ' <span class="beta">골라서만</span>' : ''}</div><div class="h">📱 ${esc(e.tip)}</div>
       </button>`).join('');
     return `<div class="pick-group">${g}</div><div class="pick-grid">${items}</div>`;
   }).join('');
   $('pick-groups').innerHTML = html
-    + '<p class="muted small" style="margin-top:12px">베타: 실제 영상으로 아직 충분히 확인하지 못한 운동이에요. 틀리게 세면 요약 화면에서 고쳐 주세요.</p>'
+    + '<p class="muted small" style="margin-top:12px">베타: 실제 영상으로 아직 충분히 확인하지 못한 운동이에요. 틀리게 세면 요약 화면에서 고쳐 주세요.<br>골라서만: 쉬는 자세와 구별이 안 돼서 자동 인식에선 빼고, 여기서 골랐을 때만 재요.</p>'
     + `<div class="card" style="margin-top:16px" id="pick-weights"></div>`;
   updatePickUI();
 }
@@ -354,22 +355,51 @@ function seg(key, options) {
 function sw(key) {
   return `<label class="switch"><input type="checkbox" data-sw="${key}" ${store.settings()[key] ? 'checked' : ''}><span></span></label>`;
 }
+const fmtRest = (sec) => (sec <= 0 ? '끔' : sec < 60 ? `${sec}초` : `${Math.floor(sec / 60)}분${sec % 60 ? ` ${sec % 60}초` : ''}`);
+let camList = null; // '카메라 찾기'로 찾은 목록 (이번 실행 동안만)
+
 function renderSettings() {
+  const st = store.settings();
   const row = (l, d, ctl, stacked) => `<div class="setting${stacked ? ' stacked' : ''}"><div><div class="l">${l}</div>${d ? `<div class="d">${d}</div>` : ''}</div>${ctl}</div>`;
+  const alerts = st.restAlerts || [];
+  const chip = (v, l) => `<button type="button" class="chip" data-alert="${v}" aria-pressed="${alerts.includes(v)}">${l}</button>`;
+  const camName = st.cameraId ? (st.cameraLabel || '고른 카메라') : '전면 기본';
+  const camOpts = camList
+    ? [['', '전면 기본(자동)'], ...camList.map((c, i) => [c.id, cameraNames(camList)[i]])]
+      .map(([id, name]) => `<button type="button" class="chip" data-cam-id="${esc(id)}" data-cam-name="${esc(name)}" aria-pressed="${st.cameraId === id}">${esc(name)}</button>`).join('')
+    : '';
   $('settings-body').innerHTML = `
     <div class="card">
       ${row('음성 안내', '횟수·세트·휴식을 소리로 알려줘요', sw('voice'))}
       ${row('소리 확인', '운동 전에 한 번 들어보세요', '<button class="mini-btn" id="btn-voice-test" type="button">들어보기</button>')}
       ${row('숫자 읽기', '', seg('countStyle', [['native', '하나 둘 셋'], ['number', '일 이 삼']]))}
       ${row('자세 교정 음성', '같은 문제가 반복될 때만 짧게 말해요', sw('cues'))}
-      ${row('휴식 타이머', '세트가 끝나면 자동으로 시작', seg('rest', [[0, '끔'], [30, '30초'], [60, '1분'], [90, '1분30'], [120, '2분']]), true)}
+    </div>
+    <h2 class="section-title">세트·휴식</h2>
+    <div class="card">
+      ${row('세트 끝 판정', '반복을 멈추고 이만큼 지나면 그 세트를 기록하고 휴식으로 넘어가요. 자동은 평소 반복 간격의 2배쯤(3.5~12초)',
+        seg('setEndSec', [[0, '자동'], [3, '3초'], [5, '5초'], [8, '8초'], [10, '10초'], [15, '15초']]), true)}
+      ${row('휴식 시간', '세트가 끝나면 자동으로 시작. 운동 중엔 +30초·휴식 끝내기 버튼', `<div class="rest-ctl">
+        <div class="stepper"><button type="button" class="mini-btn" data-rest-step="-15">−15초</button>
+        <b class="rest-val">${fmtRest(st.rest)}</b>
+        <button type="button" class="mini-btn" data-rest-step="15">+15초</button></div>
+        ${seg('rest', [[0, '끔'], [30, '30초'], [60, '1분'], [90, '1분30'], [120, '2분'], [180, '3분']])}</div>`, true)}
+      ${row('다시 시작 알림', '휴식이 끝나기 전에 소리로 알려줘요 (여러 개 고를 수 있어요). 끝나면 삐 소리와 함께 안내',
+        `<div class="chips">${chip(30, '30초 전')}${chip(10, '10초 전')}${chip(5, '5초 전')}${chip(3, '셋·둘·하나')}</div>`, true)}
+    </div>
+    <h2 class="section-title">카메라</h2>
+    <div class="card">
+      ${row('사용할 카메라', `지금: ${esc(camName)}. 전면 광각이 따로 있는 폰은 목록에 '광각'으로 나와요`,
+        `<div class="cam-ctl"><button class="mini-btn" id="btn-cam-scan" type="button">${camList ? '다시 찾기' : '카메라 찾기'}</button>
+        ${camList ? `<div class="chips">${camOpts}</div>` : ''}</div>`, true)}
+      ${row('넓게 보기(광각)', '센서 전체(4:3)로 찍어 좌우가 더 보이고, 줌을 1배 아래로 줄일 수 있는 폰은 가장 넓게 찍어요', sw('cameraWide'))}
+      ${row('화면 좌우 반전', '거울처럼 보이기 (전면 카메라일 때만)', sw('mirror'))}
     </div>
     <h2 class="section-title">인식</h2>
     <div class="card">
       ${row('인식 모델', '빠름은 오래된 폰용 (정확도는 떨어져요)', seg('model', [['full', '정확'], ['lite', '빠름']]))}
       ${row('GPU 가속', '뼈대가 안 그려지거나 앱이 멈추면 꺼 보세요(호환 모드)', sw('gpu'))}
       ${row('자동 인식 확정', '몇 번 반복하면 운동 종류를 확정할지', seg('lockReps', [[2, '2회'], [3, '3회']]))}
-      ${row('화면 좌우 반전', '거울처럼 보이기', sw('mirror'))}
       ${row('인식 과정 보기', '왜 안 세졌는지 화면에 표시 (조정용)', sw('debug'))}
     </div>
     <h2 class="section-title">화면</h2>
@@ -427,6 +457,43 @@ $('settings-body').addEventListener('click', async (e) => {
     }
   }
   if (e.target.closest('#btn-diag-settings')) exportDiag();
+  const rs = e.target.closest('[data-rest-step]');
+  if (rs) {
+    const v = Math.max(0, Math.min(600, (store.settings().rest || 0) + Number(rs.dataset.restStep)));
+    store.setSetting('rest', v);
+    renderSettings();
+    return;
+  }
+  const al = e.target.closest('[data-alert]');
+  if (al) {
+    const v = Number(al.dataset.alert);
+    const cur = new Set(store.settings().restAlerts || []);
+    if (cur.has(v)) cur.delete(v); else cur.add(v);
+    store.setSetting('restAlerts', [...cur].sort((a, b) => b - a));
+    renderSettings();
+    return;
+  }
+  const cam = e.target.closest('[data-cam-id]');
+  if (cam) {
+    store.setSetting('cameraId', cam.dataset.camId);
+    store.setSetting('cameraLabel', cam.dataset.camId ? cam.dataset.camName : '');
+    renderSettings();
+    toast(`${cam.dataset.camId ? cam.dataset.camName : '전면 기본'} 카메라로 운동해요`);
+    return;
+  }
+  if (e.target.closest('#btn-cam-scan')) {
+    const b = e.target.closest('#btn-cam-scan');
+    b.disabled = true;
+    b.textContent = '찾는 중…';
+    try {
+      camList = await listCameras();
+      if (!camList.length) toast('카메라를 찾지 못했어요');
+    } catch {
+      toast('카메라 권한이 필요해요');
+    }
+    renderSettings();
+    return;
+  }
   if (e.target.closest('#btn-wipe')) {
     if (await confirmDialog('모든 기록을 지울까요?', '설정은 남고 운동 기록만 지워져요. 되돌릴 수 없어요.', '모두 지우기')) {
       store.wipe();
