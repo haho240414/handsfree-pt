@@ -3,6 +3,7 @@
 import { EXERCISE_BY_ID } from './engine/exercises.js';
 import * as store from './store.js';
 import { esc, exName, sessionTotals, sessionItem, minutes } from './format.js';
+import { personalRecords, weeklyGroups, sessionCalories, e1rm } from './stats.js';
 
 let monthOffset = 0;
 let chartEx = null;
@@ -28,7 +29,7 @@ export function renderHistory(el) {
     el.innerHTML = '<div class="empty">아직 기록이 없어요.<br>운동을 하면 여기에 날짜별로 정리돼요.</div>';
     return;
   }
-  el.innerHTML = weekCard(sessions) + calendarCard(sessions) + chartCard(sessions) + listHtml(sessions);
+  el.innerHTML = weekCard(sessions) + groupCard(sessions) + calendarCard(sessions) + chartCard(sessions) + prCard(sessions) + listHtml(sessions);
 }
 
 function weekCard(sessions) {
@@ -37,15 +38,50 @@ function weekCard(sessions) {
   const days = new Set(cur.map((s) => dayKey(s.start))).size;
   const reps = cur.reduce((a, s) => a + sessionTotals(s).reps, 0);
   const min = cur.reduce((a, s) => a + minutes(s), 0);
+  const kcal = cur.reduce((a, s) => a + sessionCalories(s, store.settings().bodyKg || 70), 0);
   const daySet = new Set(sessions.map((s) => dayKey(s.start)));
   const d = new Date();
   if (!daySet.has(dayKey(d))) d.setDate(d.getDate() - 1);
   let streak = 0;
   while (daySet.has(dayKey(d))) { streak++; d.setDate(d.getDate() - 1); }
-  const stat = (v, u, l) => `<div class="stat"><div class="num">${v}<small style="font-size:13px"> ${u}</small></div><div class="lbl">${l}</div></div>`;
+  const stat = (v, u, l) => `<div class="stat"><div class="num">${v}${u ? `<small style="font-size:13px"> ${u}</small>` : ''}</div><div class="lbl">${l}</div></div>`;
   return `<div class="card" style="margin-bottom:12px"><div style="font-weight:800;margin-bottom:6px">이번 주</div>
-    <div class="today-card" style="margin:0">${stat(days, '일', '운동한 날')}${stat(reps, '회', '총 반복')}${stat(min, '분', '운동 시간')}</div>
+    <div class="today-card" style="margin:0;grid-template-columns:repeat(4,1fr)">${stat(days, '일', '운동한 날')}${stat(reps, '회', '총 반복')}${stat(min, '분', '운동 시간')}${stat(kcal, '', 'kcal(어림)')}</div>
     ${streak >= 2 ? `<div class="muted small" style="margin-top:8px">🔥 ${streak}일 연속 운동 중</div>` : ''}</div>`;
+}
+
+// 이번 주 부위별 세트 — 한쪽만 하고 있지 않은지 (일반적인 권장: 큰 부위 주 10세트 안팎)
+function groupCard(sessions) {
+  const g = weeklyGroups(sessions);
+  const rows = Object.entries(g).filter(([, v]) => v.sets);
+  if (!rows.length) return '';
+  const max = Math.max(...rows.map(([, v]) => v.sets), 10);
+  return `<div class="card" style="margin-bottom:12px"><div style="font-weight:800;margin-bottom:8px">이번 주 부위별 세트</div>
+    ${Object.entries(g).map(([name, v]) => `<div class="grp-row"><span class="grp-name">${name}</span>
+      <span class="grp-bar"><i style="width:${Math.round((100 * v.sets) / max)}%"></i></span>
+      <span class="grp-val">${v.sets}세트${v.volume ? ` · ${Math.round(v.volume).toLocaleString()}kg` : ''}</span></div>`).join('')}
+    <div class="muted small" style="margin-top:6px">0세트인 부위가 있으면 오늘의 루틴 '추천'이 그쪽으로 짜 줘요</div></div>`;
+}
+
+// 운동별 최고 기록: 무게 운동은 최고 무게·예상 1RM, 맨몸은 한 세트 최다 횟수, 버티기는 최장 시간
+const fmtD = (t) => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()}`; };
+function prParts(p) {
+  if (p.maxHold) return { main: `${p.maxHold.sec}초`, sub: fmtD(p.maxHold.date) };
+  if (p.maxWeight) {
+    return { main: `${p.maxWeight.w}kg × ${p.maxWeight.reps}회`, sub: `${p.best1rm ? `예상 1RM ${p.best1rm.v}kg · ` : ''}${fmtD(p.maxWeight.date)}` };
+  }
+  return { main: `${p.maxReps.reps}회`, sub: fmtD(p.maxReps.date) };
+}
+function prCard(sessions) {
+  const pr = personalRecords(sessions);
+  const rows = Object.entries(pr).filter(([, p]) => p.maxWeight || p.maxReps?.reps || p.maxHold);
+  if (!rows.length) return '';
+  return `<div class="card pr-card" style="margin-bottom:12px"><div style="font-weight:800;margin-bottom:6px">🏆 최고 기록</div>
+    ${rows.map(([ex, p]) => {
+      const { main, sub } = prParts(p);
+      return `<div class="pr-row"><span>${esc(exName(ex))}</span><span class="pr-val"><b>${main}</b><span class="muted small">${sub}</span></span></div>`;
+    }).join('')}
+    <div class="muted small" style="margin-top:6px">예상 1RM = 무게 × (1 + 횟수/30), 12회 이하일 때만</div></div>`;
 }
 
 function calendarCard(sessions) {
@@ -93,17 +129,15 @@ function chartCard(sessions) {
     b.setDate(b.getDate() + 7);
     weeks.push({ a: a.getTime(), b: b.getTime(), label: `${a.getMonth() + 1}/${a.getDate()}`, v: 0 });
   }
-  let best = null;
   for (const s of sessions) {
     for (const set of s.sets) {
       if (set.exercise !== chartEx) continue;
       const v = hold ? set.holdSec || 0 : set.reps || 0;
       const w = weeks.find((x) => set.start >= x.a && set.start < x.b);
       if (w) w.v += v;
-      const score = hold ? v : v * (set.weight || 1);
-      if (!best || score > best.score) best = { score, set };
     }
   }
+  const p = personalRecords(sessions)[chartEx];
   const max = Math.max(1, ...weeks.map((w) => w.v));
   const W = 320, H = 150, pad = 18, bw = (W - pad * 2) / weeks.length;
   const bars = weeks.map((w, i) => {
@@ -113,9 +147,8 @@ function chartCard(sessions) {
       ${w.v ? `<text class="val" x="${x + (bw - 10) / 2}" y="${y - 4}" text-anchor="middle">${w.v}</text>` : ''}
       <text x="${x + (bw - 10) / 2}" y="${H - 6}" text-anchor="middle">${w.label}</text>`;
   }).join('');
-  const bestTxt = best
-    ? `최고 기록: ${hold ? `${best.set.holdSec}초` : `${best.set.reps}회${best.set.weight ? ` × ${best.set.weight}kg` : ''}`}`
-    : '';
+  const pp = p && (p.maxWeight || p.maxReps?.reps || p.maxHold) ? prParts(p) : null;
+  const bestTxt = pp ? `최고 기록: ${pp.main} (${pp.sub})` : '';
   return `<div class="card chart" style="margin-bottom:12px"><div style="font-weight:800">운동별 주간 ${hold ? '시간(초)' : '반복 수'}</div>
     <div class="chips">${exs.slice(0, 10).map((id) => `<button class="chip" data-chart-ex="${id}" aria-pressed="${id === chartEx}">${esc(exName(id))}</button>`).join('')}</div>
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(exName(chartEx))} 최근 8주 추이">${bars}</svg>

@@ -9,6 +9,7 @@ import { isNative, NativeApp, NativeTTS, canShareFile, shareTextFile, shareBinar
 import { summarize as tempoSummary, speeds as tempoSpeeds } from './engine/tempo.js';
 import { listCameras, cameraNames } from './camera.js';
 import { loadDemos, playDemo, hasDemo } from './demo.js';
+import { newRecords, sessionCalories } from './stats.js';
 import { generateRoutine, routineMinutes, defaultItem, isHold, isTimer, isTimed, timerItem, TIMER_NAME, PLAN_META, FOCUS, EQUIPMENT, LEVELS } from './routine.js';
 
 const $ = (id) => document.getElementById(id);
@@ -427,9 +428,13 @@ function renderSummary() {
     <div class="big">${tot.reps}회</div></div>
     <div class="hero-stats">
       <div class="card stat"><div class="num">${tot.min}</div><div class="lbl">분</div></div>
-      <div class="card stat"><div class="num">${tot.sets}</div><div class="lbl">세트</div></div>
-      <div class="card stat"><div class="num">${by.size}</div><div class="lbl">종목</div></div>
+      <div class="card stat"><div class="num">${tot.sets}</div><div class="lbl">세트 · ${by.size}종목</div></div>
+      <div class="card stat"><div class="num">${sessionCalories(s, store.settings().bodyKg || 70)}</div><div class="lbl">kcal(어림)</div></div>
     </div>`;
+  const prs = newRecords(s, store.sessions());
+  if (prs.length) {
+    html += `<div class="card pr-new"><b>🏆 새 기록!</b><ul class="feedback">${prs.map((r) => `<li>${esc(r.text)}</li>`).join('')}</ul></div>`;
+  }
   if (s.planProgress) {
     const pp = s.planProgress;
     const pct = Math.round((100 * pp.setsDone) / Math.max(1, pp.setsTotal));
@@ -686,6 +691,8 @@ function renderSettings() {
     </div>
     <h2 class="section-title">화면</h2>
     <div class="card">${row('테마', '', seg('theme', [['auto', '자동'], ['light', '밝게'], ['dark', '어둡게']]))}</div>
+    <h2 class="section-title">내 정보</h2>
+    <div class="card">${row('몸무게', '운동 칼로리 어림값 계산에만 써요', `<span class="num-input"><input type="number" inputmode="decimal" min="30" max="250" step="0.5" data-num="bodyKg" value="${st.bodyKg ?? 70}"> kg</span>`)}</div>
     <h2 class="section-title">녹화한 영상으로 분석</h2>
     <div class="card">
       <p class="muted small" style="margin-top:0">운동하는 모습을 찍어둔 영상을 넣으면 똑같이 세고 기록해요. 영상은 이 기기 안에서만 처리돼요.</p>
@@ -787,6 +794,12 @@ $('settings-body').addEventListener('click', async (e) => {
 $('settings-body').addEventListener('change', async (e) => {
   const s = e.target.closest('[data-sw]');
   if (s) store.setSetting(s.dataset.sw, s.checked);
+  const num = e.target.closest('[data-num]');
+  if (num) {
+    const v = Number(num.value);
+    if (v >= Number(num.min) && v <= Number(num.max)) store.setSetting(num.dataset.num, v);
+    else { num.value = store.settings()[num.dataset.num]; toast('30~250kg 사이로 넣어 주세요'); }
+  }
   if (e.target.id === 'import-file' && e.target.files[0]) {
     try {
       const n = store.importJSON(await e.target.files[0].text());

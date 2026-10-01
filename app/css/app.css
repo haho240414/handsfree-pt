@@ -492,3 +492,17 @@ dialog h3 { margin: 0 0 10px; }
 .wo-adjust span { min-width: 74px; text-align: center; font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums; }
 .r-timer .r-name { color: var(--text-2); }
 .r-timer .r-no { background: transparent; }
+
+/* 기록: 부위별 세트·최고 기록·새 기록 */
+.grp-row { display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 10px; padding: 4px 0; font-size: 14px; }
+.grp-name { color: var(--text-2); font-weight: 600; }
+.grp-bar { height: 10px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.grp-bar i { display: block; height: 100%; background: var(--chart); border-radius: 99px; }
+.grp-val { font-variant-numeric: tabular-nums; font-size: 13px; min-width: 4.5em; text-align: right; }
+.pr-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 8px 0; font-size: 15px; }
+.pr-row + .pr-row { border-top: 1px solid var(--line); }
+.pr-val { text-align: right; flex-shrink: 0; }
+.pr-val .muted { display: block; font-size: 12px; }
+.pr-new { margin-bottom: 12px; border: 2px solid var(--accent); }
+.num-input { display: inline-flex; align-items: center; gap: 6px; }
+.num-input input { width: 84px; text-align: right; }
