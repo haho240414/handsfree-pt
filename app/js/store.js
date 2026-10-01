@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS = {
   analysisFps: 15,      // 초당 분석 장수: 15(절전, 기본 — 인식 기준을 맞춘 영상도 초당 15장) / 30(빠른 동작용)
   handGesture: true,    // 쉬는 동안 두 손을 머리 위로 2초 = 휴식 끝
   bodyKg: 70,           // 몸무게(kg): 칼로리 어림값 계산용
+  healthSync: false,    // 운동이 끝나면 헬스 커넥트(삼성 헬스)에 저장
   lockReps: 2,          // 자동 인식 확정에 필요한 반복 수
   mirror: true,         // 화면 좌우 반전(거울처럼, 전면 카메라일 때만)
   cameraId: '',         // 고른 카메라(deviceId), '' = 전면 기본

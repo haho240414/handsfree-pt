@@ -7,6 +7,8 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // 이 앱 안에 둔 플러그인: 운동 기록을 헬스 커넥트(삼성 헬스 연동)에 쓰기
+        registerPlugin(HealthConnectPlugin.class);
         super.onCreate(savedInstanceState);
         // 폰을 세워두고 운동하는 앱이라 화면이 꺼지면 안 된다
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);

@@ -5,7 +5,8 @@ import * as store from './store.js';
 import { Workout, GPU_GUARD } from './workout.js';
 import { renderHistory } from './history.js';
 import { esc, exName, DAYS, fmtDate, fmtTime, minutes, setValue, sessionTotals, sessionLine, sessionItem } from './format.js';
-import { isNative, NativeApp, NativeTTS, canShareFile, shareTextFile, shareBinaryFile } from './native.js';
+import { isNative, NativeApp, NativeTTS, NativeHealth, canShareFile, shareTextFile, shareBinaryFile } from './native.js';
+import { toHealthRecord, healthEligible } from './health.js';
 import { summarize as tempoSummary, speeds as tempoSpeeds } from './engine/tempo.js';
 import { listCameras, cameraNames } from './camera.js';
 import { loadDemos, playDemo, hasDemo } from './demo.js';
@@ -415,6 +416,7 @@ function openSummary(id, fresh) {
   else push('screen-summary', renderSummary);
   $('summary-title').textContent = fresh ? '운동 완료' : fmtDate(curSession.start);
   $('btn-summary-done').textContent = fresh ? '저장하고 닫기' : '닫기';
+  if (fresh && store.settings().healthSync) healthSave(curSession);
 }
 function renderSummary() {
   const s = curSession;
@@ -480,6 +482,12 @@ function renderSummary() {
     html += `<p class="muted small tempo-legend"><span class="sw con"></span>막대 = 반복마다 힘주는 속도 · <span class="sw slow"></span>처음보다 20% 넘게 느려진 반복(한계가 가깝다는 신호)</p>`;
   }
   html += '<button class="btn btn-ghost btn-lg" style="margin-top:12px" id="btn-add-set">+ 세트 직접 추가</button>';
+  if (NativeHealth && healthEligible(s)) {
+    html += s.health
+      ? `<div class="card hc-card"><div><b>✓ 헬스 커넥트에 저장됨</b><div class="muted small">${fmtTime(s.health.at)} · 세트를 고치면 같이 고쳐져요</div></div>
+        <button class="mini-btn" id="btn-hc-view" type="button">보기</button></div>`
+      : '<button class="btn btn-secondary btn-lg" style="margin-top:8px" id="btn-hc-save">헬스 커넥트(삼성 헬스)에 저장</button>';
+  }
   if (curFresh && s.source === 'camera' && workout.canExportDiag) {
     html += `<div class="card diag-card"><div><b>인식이 이상했나요?</b>
       <p class="muted small" style="margin:4px 0 10px">이번 운동에서 AI 가 본 관절 좌표(영상·사진 아님)를 파일로 저장해 전달해 주시면 그대로 재현해서 고칠 수 있어요.</p></div>
@@ -555,13 +563,16 @@ $('summary-body').addEventListener('click', (e) => {
   if (b) editSet(b.dataset.editSet);
   if (e.target.closest('#btn-add-set')) editSet(null);
   if (e.target.closest('#btn-diag')) exportDiag();
+  if (e.target.closest('#btn-hc-save')) healthSave(curSession, { ask: true });
+  if (e.target.closest('#btn-hc-view')) NativeHealth?.openSettings().catch((err) => toast(err.message || '열지 못했어요'));
 });
 $('btn-summary-done').addEventListener('click', () => { go('home'); });
 $('btn-delete-session').addEventListener('click', async () => {
   if (!curSession) return;
   if (!(await confirmDialog('이 운동 기록을 지울까요?', '지운 기록은 되돌릴 수 없어요.', '지우기'))) return;
   store.deleteSession(curSession.id);
-  toast('기록을 지웠어요');
+  if (curSession.health && NativeHealth) NativeHealth.deleteWorkout({ id: curSession.id }).catch(() => {});
+  toast(curSession.health && NativeHealth ? '기록을 지웠어요 (헬스 커넥트에서도)' : '기록을 지웠어요');
   go('home');
 });
 
@@ -599,6 +610,7 @@ function editSet(setId) {
       store.upsertSession(s);
       d.close('deleted');
       renderSummary();
+      if (s.health) healthSave(s, { update: true });
     };
   }
   d.onclose = () => {
@@ -617,18 +629,67 @@ function editSet(setId) {
     if (!hold && w != null) store.rememberWeight(ex, w);
     store.upsertSession(s);
     renderSummary();
+    if (s.health) healthSave(s, { update: true });
   };
   d.showModal();
 }
 
-export function confirmDialog(title, body, okText = '확인') {
+export function confirmDialog(title, body, okText = '확인', { danger = true } = {}) {
   return new Promise((resolve) => {
     const d = $('dialog');
     d.innerHTML = `<form method="dialog"><h3>${esc(title)}</h3><p class="muted">${esc(body)}</p>
-      <div class="btn-row"><button value="cancel" class="btn btn-ghost">취소</button><button value="ok" class="btn btn-danger">${esc(okText)}</button></div></form>`;
+      <div class="btn-row"><button value="cancel" class="btn btn-ghost">취소</button><button value="ok" class="btn ${danger ? 'btn-danger' : 'btn-primary'}">${esc(okText)}</button></div></form>`;
     d.onclose = () => resolve(d.returnValue === 'ok');
     d.showModal();
   });
+}
+
+/* ---------- 헬스 커넥트(삼성 헬스·구글 피트니스 연동, 안드로이드 앱만) ---------- */
+let healthIssue = ''; // 마지막 확인에서 안 된 이유: unavailable | denied | error
+/** 쓸 수 있고 권한이 있는가. ask 면 설치 안내·권한 창까지 */
+async function healthReady({ ask = true } = {}) {
+  if (!NativeHealth) return false;
+  healthIssue = '';
+  try {
+    let st = await NativeHealth.status();
+    if (!st.available) {
+      healthIssue = 'unavailable';
+      if (!ask) return false;
+      if (st.needsUpdate) {
+        const go = await confirmDialog('헬스 커넥트가 필요해요',
+          '안드로이드 13 이하에선 플레이 스토어에서 "헬스 커넥트" 앱을 설치(또는 업데이트)해야 해요. 설치한 뒤 다시 켜 주세요.', '스토어 열기', { danger: false });
+        if (go) await NativeHealth.install();
+      } else toast('이 폰은 헬스 커넥트를 지원하지 않아요 (안드로이드 9 이상)');
+      return false;
+    }
+    if (!st.granted && ask) st = await NativeHealth.requestPermission();
+    if (!st.granted) healthIssue = 'denied';
+    return !!st.granted;
+  } catch (err) {
+    healthIssue = 'error';
+    if (ask) toast(`헬스 커넥트 오류: ${err.message || err}`);
+    return false;
+  }
+}
+/** 운동 1회를 헬스 커넥트에 저장(같은 운동은 덮어써서 고침). auto = 운동 끝나고 자동, update = 세트 수정 뒤 */
+async function healthSave(s, { ask = false, update = false } = {}) {
+  if (!NativeHealth || !healthEligible(s)) return false;
+  if (!(await healthReady({ ask }))) {
+    if (!ask) toast(healthIssue === 'denied' ? '헬스 커넥트 권한이 꺼져 있어 저장하지 못했어요 (설정 → 건강 앱 연동)' : '헬스 커넥트를 쓸 수 없어 저장하지 못했어요');
+    else if (healthIssue === 'denied') toast('권한을 허용해야 헬스 커넥트에 저장할 수 있어요');
+    return false;
+  }
+  try {
+    await NativeHealth.writeWorkout(toHealthRecord(s, store.settings().bodyKg || 70));
+    s.health = { at: Date.now() };
+    store.upsertSession(s);
+    toast(update ? '헬스 커넥트 기록도 고쳤어요' : '헬스 커넥트에 저장했어요');
+    if (curSession?.id === s.id && !$('screen-summary').hidden) renderSummary();
+    return true;
+  } catch (err) {
+    toast(`헬스 커넥트에 저장하지 못했어요: ${err.message || err}`);
+    return false;
+  }
 }
 
 /* ---------- 설정 ---------- */
@@ -691,6 +752,11 @@ function renderSettings() {
     </div>
     <h2 class="section-title">화면</h2>
     <div class="card">${row('테마', '', seg('theme', [['auto', '자동'], ['light', '밝게'], ['dark', '어둡게']]))}</div>
+    ${NativeHealth ? `<h2 class="section-title">건강 앱 연동</h2>
+    <div class="card">
+      ${row('헬스 커넥트에 저장', '운동이 끝나면 운동 종류·시간·세트별 횟수·칼로리 어림값을 헬스 커넥트에 저장해요(읽지는 않아요). 삼성 헬스에도 보이려면 헬스 커넥트의 앱 권한에서 삼성 헬스가 운동을 읽도록 허용돼 있어야 해요', sw('healthSync'), true)}
+      ${row('헬스 커넥트 열기', '저장된 기록 보기·지우기, 권한 끄기', '<button class="mini-btn" id="btn-hc-settings" type="button">열기</button>')}
+    </div>` : ''}
     <h2 class="section-title">내 정보</h2>
     <div class="card">${row('몸무게', '운동 칼로리 어림값 계산에만 써요', `<span class="num-input"><input type="number" inputmode="decimal" min="30" max="250" step="0.5" data-num="bodyKg" value="${st.bodyKg ?? 70}"> kg</span>`)}</div>
     <h2 class="section-title">녹화한 영상으로 분석</h2>
@@ -710,6 +776,10 @@ function renderSettings() {
     <p class="muted small" style="text-align:center;margin-top:20px">핸즈프리 PT · 포즈 인식 MediaPipe · 영상은 폰 밖으로 나가지 않아요</p>`;
 }
 $('settings-body').addEventListener('click', async (e) => {
+  if (e.target.closest('#btn-hc-settings')) {
+    NativeHealth?.openSettings().catch((err) => toast(err.message || '헬스 커넥트를 열지 못했어요'));
+    return;
+  }
   const b = e.target.closest('[data-seg] button');
   if (b) {
     const key = b.parentElement.dataset.seg;
@@ -793,6 +863,16 @@ $('settings-body').addEventListener('click', async (e) => {
 });
 $('settings-body').addEventListener('change', async (e) => {
   const s = e.target.closest('[data-sw]');
+  if (s?.dataset.sw === 'healthSync' && s.checked) {
+    // 켤 때는 헬스 커넥트 권한부터: 허용돼야 켜진다
+    s.checked = false;
+    const ok = await healthReady({ ask: true });
+    s.checked = ok;
+    store.setSetting('healthSync', ok);
+    if (ok) toast('이제 운동이 끝나면 헬스 커넥트에 저장해요');
+    else if (healthIssue === 'denied') toast('권한을 허용해야 켤 수 있어요');
+    return;
+  }
   if (s) store.setSetting(s.dataset.sw, s.checked);
   const num = e.target.closest('[data-num]');
   if (num) {
@@ -842,7 +922,7 @@ try {
 } catch { /* 저장소를 못 쓰면 건너뜀 */ }
 
 // 검증용 접근점 (앱 자동 점검·개발 도구가 사용)
-window.__hfpt = { workout, store, isNative };
+window.__hfpt = { workout, store, isNative, NativeHealth, toHealthRecord };
 
 // 안드로이드 뒤로가기: 대화상자 닫기 → 운동 중엔 무시(실수로 꺼지지 않게) → 이전 화면 → 홈 → 앱 내리기
 NativeApp?.addListener('backButton', () => {

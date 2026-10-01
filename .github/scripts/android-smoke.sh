@@ -7,6 +7,10 @@ mkdir -p "$OUT"
 A() { timeout 90 adb "$@"; }
 echo "== 설치"; A install -r "$APK" || exit 1
 A shell pm grant "$PKG" android.permission.CAMERA
+# 헬스 커넥트 쓰기 권한(안드로이드 14 는 시스템에 들어 있다): 점검에서 실제로 써 보려고 미리 허용
+for P in WRITE_EXERCISE WRITE_TOTAL_CALORIES_BURNED; do
+  A shell pm grant "$PKG" "android.permission.health.$P" || echo "(헬스 커넥트 권한 $P 부여 실패)"
+done
 A logcat -c
 # 에뮬레이터가 막 부팅된 직후엔 실행 명령이 묻히기도 한다(실측: 20초 뒤 홈 화면, 프로세스 없음) → 프로세스가 뜰 때까지 최대 3번
 PID=""

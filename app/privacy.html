@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>핸즈프리 PT 개인정보 처리방침</title>
+<style>
+  :root { --bg: #f4f5f7; --surface: #fff; --text: #12151a; --text-2: #5d6673; --line: #e1e4e9; color-scheme: light; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0e1116; --surface: #171b22; --text: #f2f4f7; --text-2: #9aa3af; --line: #2a313d; color-scheme: dark; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 18px; margin: 28px 0 8px; }
+  .muted { color: var(--text-2); font-size: 14px; }
+  section { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 4px 18px 14px; margin-top: 14px; }
+  ul { padding-left: 20px; margin: 8px 0; }
+  li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>핸즈프리 PT 개인정보 처리방침</h1>
+  <div class="muted">시행일 2026년 10월 1일</div>
+
+  <section>
+    <h2>요약</h2>
+    <ul>
+      <li>카메라 영상은 <b>폰 안에서만</b> 자세를 읽는 데 쓰고, 저장하거나 밖으로 보내지 않습니다.</li>
+      <li>운동 기록은 이 폰 안(앱 저장공간)에만 저장됩니다. 개발자 서버는 없습니다.</li>
+      <li>헬스 커넥트 연동을 켜면 운동 기록을 <b>헬스 커넥트에 쓰기만</b> 하고, 건강 데이터를 읽지 않습니다.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>카메라</h2>
+    <p>전면 카메라 화면을 폰 안의 AI(MediaPipe)가 읽어 관절 위치를 찾고, 그 위치로 운동 종류·횟수·자세를 판단합니다. 영상과 사진은 저장하지 않고 어디로도 보내지 않습니다.</p>
+  </section>
+
+  <section>
+    <h2>저장하는 정보</h2>
+    <ul>
+      <li>운동 기록: 날짜·시간, 운동 종류, 세트별 횟수·버틴 시간·무게, 자세 지적, 템포</li>
+      <li>설정: 음성·휴식 시간·카메라 선택 등, 칼로리 어림값 계산에 쓰는 몸무게</li>
+      <li>루틴: 직접 만들거나 저장한 운동 루틴</li>
+    </ul>
+    <p>이 정보는 폰의 앱 저장공간에만 있습니다. '백업 파일 저장'이나 '진단 기록 저장·공유'를 눌렀을 때만 파일로 만들어지고, 그 파일을 어디에 보낼지는 사용자가 고릅니다. 진단 기록에는 관절 좌표(숫자)만 들어 있고 영상·사진은 없습니다.</p>
+  </section>
+
+  <section>
+    <h2>헬스 커넥트(삼성 헬스·구글 피트니스 연동)</h2>
+    <p>설정에서 '헬스 커넥트에 저장'을 켜고 권한을 허용한 경우에만, 운동이 끝나면 다음을 헬스 커넥트에 씁니다.</p>
+    <ul>
+      <li><b>운동(쓰기)</b>: 운동 시작·끝 시각, 운동 종류(근력 운동 등), 세트별 운동 종류와 횟수, 운동 이름과 세트 요약</li>
+      <li><b>총 소모 칼로리(쓰기)</b>: 그 운동 시간의 칼로리 어림값</li>
+    </ul>
+    <p>헬스 커넥트의 어떤 건강 데이터도 읽지 않습니다. 쓴 기록은 헬스 커넥트에 있는 다른 기록처럼 사용자가 허용한 다른 앱(예: 삼성 헬스)이 읽을 수 있고, 헬스 커넥트 설정에서 언제든 지우거나 권한을 끌 수 있습니다. 이 데이터는 광고·판매·제3자 제공에 쓰지 않습니다.</p>
+  </section>
+
+  <section>
+    <h2>문의</h2>
+    <p>GitHub 저장소 haho240414/handsfree-pt 의 Issues 에 남겨 주세요.</p>
+  </section>
+</main>
+</body>
+</html>

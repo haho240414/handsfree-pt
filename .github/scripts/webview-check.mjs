@@ -51,7 +51,7 @@ const stage = async (name, expression, ms) => {
 
 const app = await stage('앱', `(async () => ({
   url: location.href, native: window.__hfpt?.isNative, platform: Capacitor.getPlatform(),
-  plugins: ['TextToSpeech','App','Share','Filesystem'].filter((p) => Capacitor.isPluginAvailable(p)),
+  plugins: ['TextToSpeech','App','Share','Filesystem','HealthConnect'].filter((p) => Capacitor.isPluginAvailable(p)),
   koreanTTS: await window.__hfpt?.workout.voice.koreanAvailable(),
   webview: (navigator.userAgent.match(/Chrome\\/([\\d.]+)/) || [])[1], home: document.getElementById('btn-start-auto')?.innerText,
 }))()`);
@@ -137,14 +137,37 @@ if (cam?.running) {
   })()`, 60000);
 }
 
-const required = app?.native === true && app?.plugins?.includes('TextToSpeech')
+// 참고 단계: 헬스 커넥트 — 상태 → 운동 쓰기 → 같은 운동 다시 쓰기(새로 안 생기고 고쳐짐) → 지우기
+const hc = await stage('헬스 커넥트', `(async () => {
+  const H = window.__hfpt?.NativeHealth;
+  if (!H) return { plugin: false };
+  const st = await H.status();
+  if (!st.granted) return { plugin: true, ...st };
+  const now = Date.now();
+  const s = { id: 'ci-' + now, start: now - 15 * 60000, end: now - 60000, source: 'camera', sets: [
+    { id: 'a', exercise: 'squat', kind: 'reps', reps: 10, weight: 40, start: now - 840000, end: now - 810000 },
+    { id: 'b', exercise: 'pushup', kind: 'reps', reps: 15, start: now - 600000, end: now - 575000 },
+    { id: 'c', exercise: 'plank', kind: 'hold', holdSec: 40, start: now - 300000, end: now - 260000 },
+  ] };
+  const rec = window.__hfpt.toHealthRecord(s, 70);
+  const out = { plugin: true, ...st, kcal: rec.kcal, segments: rec.segments.length };
+  try { out.first = await H.writeWorkout(rec); } catch (e) { out.first = String(e.message || e); }
+  try { out.again = await H.writeWorkout({ ...rec, version: rec.version + 1, notes: rec.notes + '\\n(수정)' }); } catch (e) { out.again = String(e.message || e); }
+  try { await H.deleteWorkout({ id: s.id }); out.deleted = true; } catch (e) { out.deleted = String(e.message || e); }
+  return out;
+})()`, 60000);
+
+const required = app?.native === true && app?.plugins?.includes('TextToSpeech') && app?.plugins?.includes('HealthConnect')
   && engine?.knee === 180 && engine?.hipH === 0.9 && typeof model?.loadMs === 'number';
 report.required = required;
 report.cameraOk = !!(cam?.running && cam?.fps > 0);
 report.backOk = back ? back.stillInWorkout === true : null;
 report.tiltOk = cam ? cam.tiltRaw != null : null;
 report.cameras = cams?.names ?? null;
+report.healthOk = hc?.first?.ids?.length === 2 && hc?.again?.ids?.length === 2 && hc?.deleted === true;
+report.healthSameRecord = report.healthOk ? hc.first.ids[0] === hc.again.ids[0] : null;
 save();
-console.log(`필수 점검 ${required ? '통과' : '실패'} · 카메라 ${report.cameraOk ? '동작' : '확인 안 됨'} · 뒤로가기 ${report.backOk} · 기울기 센서 ${report.tiltOk ? `${cam.pitch?.toFixed?.(1) ?? '-'}°` : '값 없음'}`);
+console.log(`필수 점검 ${required ? '통과' : '실패'} · 카메라 ${report.cameraOk ? '동작' : '확인 안 됨'} · 뒤로가기 ${report.backOk} · 기울기 센서 ${report.tiltOk ? `${cam.pitch?.toFixed?.(1) ?? '-'}°` : '값 없음'}`
+  + ` · 헬스 커넥트 ${report.healthOk ? `쓰기·고치기·지우기 통과(같은 기록 ${report.healthSameRecord})` : JSON.stringify(hc)}`);
 try { ws.close(); } catch { /* 무시 */ }
 process.exit(required ? 0 : 1);

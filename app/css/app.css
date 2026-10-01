@@ -506,3 +506,4 @@ dialog h3 { margin: 0 0 10px; }
 .pr-new { margin-bottom: 12px; border: 2px solid var(--accent); }
 .num-input { display: inline-flex; align-items: center; gap: 6px; }
 .num-input input { width: 84px; text-align: right; }
+.hc-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
