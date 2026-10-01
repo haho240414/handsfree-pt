@@ -7,7 +7,7 @@ import { summarize as tempoSummary, speeds as tempoSpeeds } from './engine/tempo
 import { createPoseLandmarker, BONES, JOINTS } from './pose.js';
 import { Voice, nativeKorean } from './voice.js';
 import { TiltSensor } from './tilt.js';
-import { DiagRecorder } from './diag.js';
+import { DiagRecorder, corrections } from './diag.js';
 import { openCamera, widenCamera } from './camera.js';
 import { PlanRunner, isHold, isTimer, isTimed, TIMER_STEPS, PLAN_META, weightStep } from './routine.js';
 import { loadDemos, playDemo, hasDemo } from './demo.js';
@@ -1166,10 +1166,13 @@ export class Workout {
 
   /** 마지막 운동의 진단 기록 파일 (관절 좌표만) */
   get canExportDiag() { return this.diag.hasData; }
-  exportDiag(note) {
+  /** session: 저장소의 이 운동 기록(요약 화면에서 고친 세트·정답 포함), 없으면 운동 끝날 때의 기록 */
+  exportDiag(note, session = null) {
+    const s = session || this.lastSession;
     return this.diag.exportFile({
       note,
-      sets: this.lastSession?.sets || this.tracker?.sets || [],
+      sets: s?.sets || this.tracker?.sets || [],
+      truth: corrections(s, exName),
       log: [...(this.prevLogs || []), ...(this.tracker?.log || [])].slice(-1500),
       extra: { fps: this.fps, delegate: this.landmarker?.delegate ?? null, tilt: this.lastTiltDeg ?? null, wallT0: this.wallT0 ?? null },
     });

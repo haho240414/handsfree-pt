@@ -7,6 +7,7 @@ import { renderHistory } from './history.js';
 import { esc, exName, DAYS, fmtDate, fmtTime, minutes, setValue, sessionTotals, sessionLine, sessionItem } from './format.js';
 import { isNative, NativeApp, NativeTTS, NativeHealth, canShareFile, shareTextFile, shareBinaryFile } from './native.js';
 import { toHealthRecord, healthEligible } from './health.js';
+import { corrections } from './diag.js';
 import { summarize as tempoSummary, speeds as tempoSpeeds } from './engine/tempo.js';
 import { listCameras, cameraNames } from './camera.js';
 import { loadDemos, playDemo, hasDemo } from './demo.js';
@@ -523,17 +524,21 @@ function tempoRow(set) {
 // 진단 기록 내보내기: 실제로 한 운동·횟수를 같이 적어 받으면 어디서 틀렸는지 바로 찾을 수 있다
 function exportDiag() {
   const d = $('dialog');
+  // 진단 기록은 마지막 운동의 것: 요약 화면에서 고친 세트가 그대로 정답이 된다
+  const sess = store.getSession(workout.lastSession?.id) || workout.lastSession;
+  const fixes = corrections(sess, exName);
   d.innerHTML = `<form method="dialog"><h3>진단 기록 저장·공유</h3>
     <p class="muted small" style="margin-top:0">AI 가 본 관절 좌표만 담겨요(영상·사진 없음, 최근 20분). 실제로 한 운동과 횟수를 적어 주면 어디서 틀렸는지 바로 찾을 수 있어요.</p>
+    ${fixes.length ? `<p class="small" style="margin:0 0 8px">✓ 요약 화면에서 고친 세트 ${fixes.length}개가 정답으로 함께 담겨요.</p>` : ''}
     <div class="field"><label for="diag-note">실제로 한 운동·횟수 (선택)</label>
-      <textarea id="diag-note" rows="3" placeholder="예: 스쿼트 12, 10, 10 / 랫풀다운 12 (2세트는 안 셌음)"></textarea></div>
+      <textarea id="diag-note" rows="${Math.min(6, Math.max(3, fixes.length + 1))}" placeholder="예: 스쿼트 12, 10, 10 / 랫풀다운 12 (2세트는 안 셌음)">${esc(fixes.map((f) => f.text).join('\n'))}</textarea></div>
     <div class="btn-row"><button value="cancel" class="btn btn-ghost">취소</button><button value="ok" class="btn btn-primary">파일 만들기</button></div></form>`;
   d.onclose = async () => {
     if (d.returnValue !== 'ok') return;
     const note = $('diag-note').value.trim();
     toast('진단 기록 만드는 중…', 15000);
     try {
-      const f = await workout.exportDiag(note);
+      const f = await workout.exportDiag(note, sess);
       const mb = `${(f.bytes.length / 1048576).toFixed(1)}MB`;
       if (isNative) {
         await shareBinaryFile(f.name, f.bytes);
@@ -607,6 +612,10 @@ function editSet(setId) {
   if (set) {
     $('ed-del').onclick = () => {
       s.sets = s.sets.filter((x) => x.id !== set.id);
+      if (!set.added) {
+        const o = set.orig || set;
+        (s.removedSets ||= []).push({ exercise: o.exercise, kind: o.kind, reps: o.reps, holdSec: o.holdSec, start: set.start, end: set.end });
+      }
       store.upsertSession(s);
       d.close('deleted');
       renderSummary();
@@ -619,7 +628,8 @@ function editSet(setId) {
     const hold = EXERCISE_BY_ID[ex].kind === 'hold';
     const val = Math.max(0, Math.round(Number($('ed-val').value || 0)));
     const w = $('ed-w').value === '' ? null : Number($('ed-w').value);
-    const target = set || { id: store.uid(), start: s.end || s.start, end: s.end || s.start, issues: {}, good: null };
+    const target = set || { id: store.uid(), start: s.end || s.start, end: s.end || s.start, issues: {}, good: null, added: true };
+    if (set && !set.orig && !set.added) set.orig = { exercise: set.exercise, kind: set.kind, reps: set.reps, holdSec: set.holdSec };
     Object.assign(target, {
       exercise: ex, kind: hold ? 'hold' : 'reps',
       reps: hold ? null : val, holdSec: hold ? val : null, weight: hold ? null : w, edited: true,

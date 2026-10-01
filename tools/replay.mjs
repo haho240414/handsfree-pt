@@ -3,7 +3,8 @@
 // 앱이 실제로 낸 결과와 비교, 왜 안 셌는지(후보 반복과 탈락 이유)를 보여준다.
 //   node tools/replay.mjs <파일> [--why] [--fixed 운동id] [--save 이름]
 //   --why   : 후보 반복마다 통과/탈락 이유 (어떤 조건이 막았는지)
-//   --save  : test/fixtures/<이름>.full.json 으로 저장 → test/truth.json 에 정답을 적으면 eval 에 들어간다
+//   --save  : test/fixtures/<이름>.full.json 으로 저장 → eval 에 들어간다. 운동이 한 종류면 정답표(test/truth.json)에도
+//             자동으로 넣는다(사용자가 요약 화면에서 고친 값 = 정답). 여러 종류면 운동별 합계를 보여주고 직접 적게 한다
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -50,12 +51,22 @@ console.log(`기록 ${doc.meta?.startedAt ?? ""} · ${Math.floor(dur / 60)}분 $
 console.log(`폰: ${m.ua ?? '?'}`);
 console.log(`설정: 모델 ${m.settings?.model} · ${m.delegate ?? '?'} · 확정 ${m.settings?.lockReps}회 · 모드 ${m.mode}${m.candidates ? ` (${m.candidates.map(name).join(', ')})` : ''} · 앱 fps ${m.fps ?? '?'} · 기울기 ${m.tilt ?? '-'}°`);
 if (doc.note) console.log(`사용자 메모: ${doc.note}`);
-console.log('\n앱이 기록한 세트:');
+console.log('\n앱이 기록한 세트 (요약 화면에서 고친 값 반영):');
 const rel = (s, k) => s[`${k}T`] ?? (m.wallT0 && s[k] ? ((s[k] - m.wallT0) / 1000).toFixed(1) : '?');
+const fmtV = (s) => `${s.exercise !== undefined ? `${name(s.exercise)} ` : ''}${s.kind === 'hold' ? `${s.holdSec}초` : `${s.reps}회`}`;
 for (const s of doc.sets || []) {
   const plan = s.plan ? ` · 목표 ${s.plan.target}${s.plan.manual ? '(직접 완료)' : ''}` : '';
-  const fix = s.origReps != null ? ` · 앱이 센 값 ${s.origReps}회 → 사용자가 고침` : '';
-  console.log(`  ${name(s.exercise)} ${s.kind === 'hold' ? `${s.holdSec}초` : `${s.reps}회`}  (${rel(s, 'start')}~${rel(s, 'end')}초)${plan}${fix}`);
+  const fix = s.added ? ' · 사용자가 추가(앱이 못 셈)' : s.orig ? ` · 앱이 센 값 ${fmtV(s.orig)} → 사용자가 고침` : '';
+  console.log(`  ${fmtV(s)}  (${rel(s, 'start')}~${rel(s, 'end')}초)${plan}${fix}`);
+}
+if (doc.truth?.length) {
+  console.log('\n사용자가 고친 부분 = 정답:');
+  const cv = (x) => `${name(x.exercise)} ${x.value}${x.kind === 'hold' ? '초' : '회'}`;
+  for (const c of doc.truth) {
+    const what = c.type === 'edit' ? `앱 ${cv(c.app)} → 실제 ${cv(c.actual)}`
+      : c.type === 'add' ? `${cv(c.actual)} — 앱이 못 센 세트(직접 추가)` : `${cv(c.app)} — 안 한 세트(지움)`;
+    console.log(`  ${rel(c, 'start')}~${rel(c, 'end')}초  ${what}`);
+  }
 }
 
 // 재현: 같은 설정 + 같은 시점의 기울기 보정
@@ -76,6 +87,18 @@ console.log(`\n재현 결과${fixed ? ` (운동 고정: ${name(fixed)})` : ''}:`
 for (const s of tr.sets) {
   const tempo = s.tempoSum ? `  템포 ${s.tempoSum.con}/${s.tempoSum.ecc}초${s.tempoSum.speed != null ? ` ${s.tempoSum.speed}m/s` : ''}` : '';
   console.log(`  ${name(s.exercise)} ${s.kind === 'hold' ? `${s.holdSec}초` : `${s.reps}회`}  (${s.startT}~${s.endT}초)${tempo}`);
+}
+// 운동별 합계: 정답(사용자가 확인·고친 기록) vs 지금 엔진으로 재현
+const totals = (sets) => {
+  const o = {};
+  for (const s of sets || []) o[s.exercise] = (o[s.exercise] || 0) + (s.kind === 'hold' ? s.holdSec || 0 : s.reps || 0);
+  return o;
+};
+const want = totals(doc.sets), got = totals(tr.sets);
+console.log(`\n운동별 합계 — ${doc.truth?.length ? '정답(사용자가 고친 기록)' : '앱 기록'} / 재현:`);
+for (const ex of new Set([...Object.keys(want), ...Object.keys(got)])) {
+  const a = want[ex] ?? 0, b = got[ex] ?? 0;
+  console.log(`  ${name(ex).padEnd(14)} ${String(a).padStart(4)} / ${String(b).padStart(4)}${a === b ? '  ✓' : `  (${b - a > 0 ? '+' : ''}${b - a})`}`);
 }
 
 // 운동별 후보 반복: 몇 번 잡혔고 몇 번 통과했는지, 가장 많이 막은 조건
@@ -106,5 +129,21 @@ if (save) {
     name: save, url: null, source: 'app-diag', fps: 15, model: m.settings?.model ?? 'full', duration: dur,
     note: doc.note || '', tilts, frames: frames.map((f) => ({ t: Math.round(f.t * 1000) / 1000, lm: round(f.lm), wl: round(f.wl) })),
   }));
-  console.log(`\n저장: ${path.relative(ROOT, out)} — test/truth.json 에 "${save}": { "exercise": "...", "reps": N, "split": "dev" } 를 추가하세요`);
+  console.log(`\n저장: ${path.relative(ROOT, out)}`);
+  const exs = Object.keys(want);
+  const truthFile = path.join(ROOT, 'test/truth.json');
+  const table = JSON.parse(fs.readFileSync(truthFile, 'utf8'));
+  if (table[save]) console.log(`정답표에 이미 "${save}" 가 있어 그대로 둡니다`);
+  else if (exs.length === 1) {
+    const ex = exs[0];
+    const hold = EXERCISE_BY_ID[ex]?.kind === 'hold';
+    const src = doc.truth?.length ? '앱 진단 기록(사용자가 고친 값)' : '앱 진단 기록(사용자가 고치지 않음 — 맞는지 확인)';
+    table[save] = hold
+      ? { exercise: ex, reps: null, hold: want[ex], conf: 'user', view: src, split: 'dev' }
+      : { exercise: ex, reps: want[ex], conf: 'user', view: src, split: 'dev' };
+    fs.writeFileSync(truthFile, `${JSON.stringify(table, null, 1)}\n`);
+    console.log(`정답표에 추가: "${save}": ${JSON.stringify(table[save])}`);
+  } else {
+    console.log(`운동이 ${exs.length}종이라 정답표는 직접 적어 주세요 (eval 은 영상 하나에 운동 하나): ${exs.map((e) => `${e} ${want[e]}`).join(', ')}`);
+  }
 }

@@ -5,6 +5,7 @@
 //   --tilt N : 폰을 N°(+ = 뒤로 기대 올려다봄) 기울여 둔 것처럼 기울기 센서 값을 흘려 넣는다
 //   --set 키=값 : 설정을 바꿔서 실행 (여러 번 가능, 예: --set rest=15 --set setEndSec=3 --set restAlerts=10,5,3)
 //   --after N : 영상이 끝난 뒤 N초 더 지켜본다 (휴식 타이머·알림 확인용, 기본 4)
+//   --edit N  : 요약 화면에서 첫 세트를 N회로 고친 뒤 진단 기록을 낸다 (고친 값 = 정답이 기록·재현에 나오는지)
 //   --plan 'warmup:6s,squat:t8x1,squat:3x2:rest=6,plank:20sx1' : 오늘의 루틴(PT 모드)으로 시작
 //          운동:횟수x세트[:rest=초], 버티기는 '20s', 인터벌(시간 동안)은 't30', 준비운동/마무리는 'warmup:60s'
 import fs from 'node:fs';
@@ -24,6 +25,7 @@ const shots = opt('--shots', null);
 const tilt = opt('--tilt', null);
 const landscape = argv.includes('--landscape');
 const after = Number(opt('--after', 4));
+const editTo = opt('--edit', null);
 const planArg = opt('--plan', null);
 const plan = planArg && {
   name: '점검 루틴',
@@ -162,9 +164,22 @@ try {
   console.log(`\n요약 화면: ${sum.title} · 진단 기록 버튼 ${sum.diagBtn ? '있음' : '없음'}\n  ${sum.body}`);
   if (shots) await page.screenshot({ path: path.join(shots, `${clip}-summary.png`), fullPage: true });
 
-  // 진단 기록 → 파일 → 재현
+  if (editTo != null) {
+    // 사용자가 요약 화면에서 횟수를 고치는 것처럼: 첫 세트 [수정] → 횟수 입력 → 저장
+    await page.evaluate(() => document.querySelector('[data-edit-set]').click());
+    await page.evaluate((n) => { document.getElementById('ed-val').value = n; document.getElementById('ed-ok').click(); }, editTo);
+    await new Promise((r) => setTimeout(r, 300));
+    // 진단 기록 창: 고친 내용이 메모 칸에 미리 적혀 있는지
+    await page.evaluate(() => document.getElementById('btn-diag').click());
+    const pre = await page.evaluate(() => ({ note: document.getElementById('diag-note').value, hint: document.querySelector('#dialog p.small:not(.muted)')?.innerText }));
+    console.log(`\n세트 수정 → 진단 기록 창 미리 적힌 메모: ${JSON.stringify(pre.note)} · ${pre.hint ?? '(안내 없음)'}`);
+    if (!pre.note.includes(`실제`)) code = 1;
+    await page.evaluate(() => document.getElementById('dialog').close('cancel'));
+  }
+  // 진단 기록 → 파일 → 재현 (앱과 같이 저장소의 기록 = 요약 화면에서 고친 값으로)
   const b64 = await page.evaluate(async () => {
-    const f = await window.__hfpt.workout.exportDiag('camera-sim 자동 점검');
+    const { workout, store } = window.__hfpt;
+    const f = await workout.exportDiag('camera-sim 자동 점검', store.getSession(workout.lastSession?.id));
     let s = '';
     for (let i = 0; i < f.bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, f.bytes.subarray(i, i + 0x8000));
     return { name: f.name, data: btoa(s) };
@@ -172,7 +187,9 @@ try {
   const out = path.join(os.tmpdir(), b64.name);
   fs.writeFileSync(out, Buffer.from(b64.data, 'base64'));
   console.log(`\n진단 기록 ${(fs.statSync(out).size / 1024).toFixed(0)}KB → 재현:`);
-  console.log(execFileSync('node', [path.join(ROOT, 'tools/replay.mjs'), out], { encoding: 'utf8' }).split('\n').slice(0, 14).join('\n'));
+  const rep = execFileSync('node', [path.join(ROOT, 'tools/replay.mjs'), out], { encoding: 'utf8' });
+  console.log(rep.split('\n').slice(0, editTo != null ? 40 : 14).join('\n'));
+  if (editTo != null && !rep.includes('사용자가 고친 부분 = 정답')) { console.log('※ 재현에 정답이 안 나옴'); code = 1; }
   if (!sawPending) console.log('※ 확정 전 후보 표시를 못 봤어요(너무 빨리 지나갔을 수 있음)');
   if (!sawTempo) { console.log('※ 템포 패널이 안 보였어요'); code = 1; }
   if (!sum.diagBtn) code = 1;

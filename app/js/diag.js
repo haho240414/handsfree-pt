@@ -67,13 +67,13 @@ export class DiagRecorder {
    * 20분이면 수십 MB 라 한꺼번에 문자열로 만들지 않고 1분씩 이어 붙이며 바로 gzip 한다(폰 메모리 보호).
    * @returns {Promise<{name:string, bytes:Uint8Array, mime:string}>}
    */
-  async exportFile({ note = '', sets = [], log = [], extra = {} } = {}) {
+  async exportFile({ note = '', sets = [], log = [], extra = {}, truth = [] } = {}) {
     const d = new Date(this.meta.startedAt);
     const p2 = (n) => String(n).padStart(2, '0');
     const stamp = `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}`;
     const head = JSON.stringify({
       format: 'hfpt-diag-1', scale: Q, layout: 'lm33[x,y,z,vis] + wl33[x,y,z]',
-      note, meta: { ...this.meta, ...extra }, events: this.events, sets, log,
+      note, meta: { ...this.meta, ...extra }, events: this.events, sets, truth, log,
     }).slice(0, -1) + ',"frames":[';
     const parts = [head];
     let first = true;
@@ -105,4 +105,30 @@ export class DiagRecorder {
     await w.close();
     return { name: `${base}.gz`, bytes: new Uint8Array(await out), mime: 'application/gzip' };
   }
+}
+
+/**
+ * 사용자가 요약 화면에서 고친 세트 = 앱이 틀린 곳의 정답. 진단 기록(truth)에 담고 메모 칸에도 미리 적는다.
+ * 세트를 처음 고칠 때 앱이 센 값을 set.orig 에 남기고, 직접 추가한 세트는 added, 지운 세트는 session.removedSets.
+ * @returns {Array<{type:'edit'|'add'|'remove', app:{exercise,kind,value}|null, actual:{exercise,kind,value}|null, start, end, text}>}
+ */
+export function corrections(session, nameOf = (id) => id) {
+  const v = (s) => ({ exercise: s.exercise, kind: s.kind, value: s.kind === 'hold' ? s.holdSec ?? 0 : s.reps ?? 0 });
+  const txt = (x) => `${nameOf(x.exercise)} ${x.value}${x.kind === 'hold' ? '초' : '회'}`;
+  const out = [];
+  for (const s of session?.sets || []) {
+    const actual = v(s);
+    if (s.added) {
+      out.push({ type: 'add', app: null, actual, start: s.start, end: s.end, text: `${txt(actual)} — 앱이 못 센 세트(직접 추가)` });
+    } else if (s.orig) {
+      const app = v(s.orig);
+      if (app.exercise === actual.exercise && app.value === actual.value && app.kind === actual.kind) continue;
+      out.push({ type: 'edit', app, actual, start: s.start, end: s.end, text: `앱 ${txt(app)} → 실제 ${txt(actual)}` });
+    }
+  }
+  for (const r of session?.removedSets || []) {
+    const app = v(r);
+    out.push({ type: 'remove', app, actual: null, start: r.start, end: r.end, text: `${txt(app)} — 안 한 세트(지움)` });
+  }
+  return out.sort((a, b) => (a.start || 0) - (b.start || 0));
 }
