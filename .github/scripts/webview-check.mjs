@@ -93,7 +93,9 @@ const cam = await stage('카메라 운동 화면', `(async () => {
     s = { running: w.running, fps: w.fps, delegate: w.landmarker?.delegate ?? null,
       loading: document.getElementById('wo-loading').hidden ? null : document.getElementById('wo-loading-text').innerText,
       status: document.getElementById('wo-status-text').innerText,
-      video: [document.getElementById('cam').videoWidth, document.getElementById('cam').videoHeight] };
+      video: [document.getElementById('cam').videoWidth, document.getElementById('cam').videoHeight],
+      // 앱(WebView) 안에서 기울기 센서 값이 실제로 들어오는지 (에뮬레이터 가상 가속도계)
+      tiltRaw: w.tilt.g ? w.tilt.g.map((v) => +v.toFixed(2)) : null, pitch: w.tilt.pitchDeg() };
     if (s.running && s.fps > 0 && i >= 4) break;
   }
   return s;
@@ -114,7 +116,8 @@ const required = app?.native === true && app?.plugins?.includes('TextToSpeech')
 report.required = required;
 report.cameraOk = !!(cam?.running && cam?.fps > 0);
 report.backOk = back ? back.stillInWorkout === true : null;
+report.tiltOk = cam ? cam.tiltRaw != null : null;
 save();
-console.log(`필수 점검 ${required ? '통과' : '실패'} · 카메라 ${report.cameraOk ? '동작' : '확인 안 됨'} · 뒤로가기 ${report.backOk}`);
+console.log(`필수 점검 ${required ? '통과' : '실패'} · 카메라 ${report.cameraOk ? '동작' : '확인 안 됨'} · 뒤로가기 ${report.backOk} · 기울기 센서 ${report.tiltOk ? `${cam.pitch?.toFixed?.(1) ?? '-'}°` : '값 없음'}`);
 try { ws.close(); } catch { /* 무시 */ }
 process.exit(required ? 0 : 1);

@@ -5,7 +5,8 @@ import * as store from './store.js';
 import { Workout, GPU_GUARD } from './workout.js';
 import { renderHistory } from './history.js';
 import { esc, exName, DAYS, fmtDate, fmtTime, minutes, setValue, sessionTotals, sessionLine, sessionItem } from './format.js';
-import { isNative, NativeApp, NativeTTS, canShareFile, shareTextFile } from './native.js';
+import { isNative, NativeApp, NativeTTS, canShareFile, shareTextFile, shareBinaryFile } from './native.js';
+import { summarize as tempoSummary, speeds as tempoSpeeds } from './engine/tempo.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -130,9 +131,11 @@ $('btn-start-picked').addEventListener('click', () => {
 
 /* ---------- 요약 / 상세 ---------- */
 let curSession = null;
+let curFresh = false;
 function openSummary(id, fresh) {
   curSession = store.getSession(id);
   if (!curSession) return;
+  curFresh = !!fresh;
   if (fresh) { stack.length = 0; stack.push('screen-home'); push('screen-summary', renderSummary); stack.length = 1; }
   else push('screen-summary', renderSummary);
   $('summary-title').textContent = fresh ? '운동 완료' : fmtDate(curSession.start);
@@ -167,7 +170,7 @@ function renderSummary() {
         ? (bad ? `<span class="q warn">자세 지적 ${bad}회</span>` : '<span class="q">좋은 자세 ✓</span>')
         : '<span class="q"></span>';
       html += `<div class="set-row"><div class="set-no">${i + 1}</div>
-        <div class="set-main"><div class="v">${setValue(set)}${set.weight ? ` <span class="muted" style="font-size:14px">× ${set.weight}kg</span>` : ''}</div>${q}</div>
+        <div class="set-main"><div class="v">${setValue(set)}${set.weight ? ` <span class="muted" style="font-size:14px">× ${set.weight}kg</span>` : ''}</div>${q}${tempoRow(set)}</div>
         <div class="set-edit"><button class="mini-btn" data-edit-set="${esc(set.id)}">수정</button></div></div>`;
       for (const [code, n] of Object.entries(set.issues || {})) {
         const info = formInfo(ex, code);
@@ -187,13 +190,85 @@ function renderSummary() {
   } else if (s.sets.some((x) => x.good != null)) {
     html += '<div class="card" style="margin-top:4px">👍 자세 지적 없이 끝냈어요.</div>';
   }
+  if (s.sets.some((x) => tempoRow(x))) {
+    html += `<p class="muted small tempo-legend"><span class="sw con"></span>막대 = 반복마다 힘주는 속도 · <span class="sw slow"></span>처음보다 20% 넘게 느려진 반복(한계가 가깝다는 신호)</p>`;
+  }
   html += '<button class="btn btn-ghost btn-lg" style="margin-top:12px" id="btn-add-set">+ 세트 직접 추가</button>';
+  if (curFresh && s.source === 'camera' && workout.canExportDiag) {
+    html += `<div class="card diag-card"><div><b>인식이 이상했나요?</b>
+      <p class="muted small" style="margin:4px 0 10px">이번 운동에서 AI 가 본 관절 좌표(영상·사진 아님)를 파일로 저장해 전달해 주시면 그대로 재현해서 고칠 수 있어요.</p></div>
+      <button class="btn btn-secondary" id="btn-diag">진단 기록 저장·공유</button></div>`;
+  }
   $('summary-body').innerHTML = html;
+}
+
+// 세트의 템포: 반복별 힘주기 속도 막대 + 평균 시간
+function tempoRow(set) {
+  const def = EXERCISE_BY_ID[set.exercise]?.tempo;
+  const list = set.tempo;
+  if (!def || !list?.some(Boolean) || set.edited) return '';
+  const sum = set.tempoSum || tempoSummary(list);
+  const sp = tempoSpeeds(list);
+  const vals = list.map((x) => (x ? (sp.metric ? x.conSpeed : x.conRate) : null));
+  const ok = vals.filter((v) => v != null);
+  const top = Math.max(...ok, 1e-9);
+  const best = Math.max(...ok.slice(0, 3));
+  const bars = vals.map((v, i) => {
+    const h = v == null ? 2 : Math.max(2, (v / top) * 28);
+    const cls = v == null ? 'none' : i && v < 0.8 * best ? 'slow' : 'con';
+    return `<rect class="${cls}" x="${i * 10 + 1}" y="${30 - h}" width="8" height="${h}" rx="2"/>`;
+  }).join('');
+  const sec = (v) => (v == null ? '-' : `${v.toFixed(1)}초`);
+  const parts = [`${def.con} ${sec(sum.con)}`, `${def.ecc} ${sec(sum.ecc)}`];
+  if (sum.speed != null) parts.push(`${sum.speed.toFixed(2)}m/s`);
+  if (sum.loss != null && sum.loss >= 10) parts.push(`막판 속도 −${sum.loss}%`);
+  return `<div class="tempo-row"><svg class="tempo-bars" viewBox="0 0 ${vals.length * 10} 30" style="width:${Math.min(160, vals.length * 11)}px" aria-hidden="true">${bars}</svg>
+    <span class="tempo-txt">${esc(parts.join(' · '))}</span></div>`;
+}
+
+// 진단 기록 내보내기: 실제로 한 운동·횟수를 같이 적어 받으면 어디서 틀렸는지 바로 찾을 수 있다
+function exportDiag() {
+  const d = $('dialog');
+  d.innerHTML = `<form method="dialog"><h3>진단 기록 저장·공유</h3>
+    <p class="muted small" style="margin-top:0">AI 가 본 관절 좌표만 담겨요(영상·사진 없음, 최근 20분). 실제로 한 운동과 횟수를 적어 주면 어디서 틀렸는지 바로 찾을 수 있어요.</p>
+    <div class="field"><label for="diag-note">실제로 한 운동·횟수 (선택)</label>
+      <textarea id="diag-note" rows="3" placeholder="예: 스쿼트 12, 10, 10 / 랫풀다운 12 (2세트는 안 셌음)"></textarea></div>
+    <div class="btn-row"><button value="cancel" class="btn btn-ghost">취소</button><button value="ok" class="btn btn-primary">파일 만들기</button></div></form>`;
+  d.onclose = async () => {
+    if (d.returnValue !== 'ok') return;
+    const note = $('diag-note').value.trim();
+    toast('진단 기록 만드는 중…', 15000);
+    try {
+      const f = await workout.exportDiag(note);
+      const mb = `${(f.bytes.length / 1048576).toFixed(1)}MB`;
+      if (isNative) {
+        await shareBinaryFile(f.name, f.bytes);
+      } else {
+        const file = new File([f.bytes], f.name, { type: f.mime });
+        let shared = false;
+        if (navigator.canShare?.({ files: [file] })) {
+          try { await navigator.share({ files: [file], title: '핸즈프리 PT 진단 기록' }); shared = true; } catch (err) { if (err?.name === 'AbortError') shared = true; }
+        }
+        if (!shared) {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(file);
+          a.download = f.name;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        }
+      }
+      toast(`진단 기록 ${mb} 준비 완료`);
+    } catch (err) {
+      if (!/cancel/i.test(err?.message || '')) toast('내보내지 못했어요');
+    }
+  };
+  d.showModal();
 }
 $('summary-body').addEventListener('click', (e) => {
   const b = e.target.closest('[data-edit-set]');
   if (b) editSet(b.dataset.editSet);
   if (e.target.closest('#btn-add-set')) editSet(null);
+  if (e.target.closest('#btn-diag')) exportDiag();
 });
 $('btn-summary-done').addEventListener('click', () => { go('home'); });
 $('btn-delete-session').addEventListener('click', async () => {
@@ -309,6 +384,7 @@ function renderSettings() {
       <p class="muted small" style="margin:0">기록은 이 폰의 브라우저 안에만 저장돼요. 폰을 바꾸거나 브라우저 데이터를 지우기 전에 백업해 두세요.</p>
       <div class="btn-row"><button class="btn btn-secondary" id="btn-export">백업 파일 저장</button>
       <label class="btn btn-secondary" style="cursor:pointer">백업 불러오기<input type="file" accept="application/json,.json" id="import-file" hidden></label></div>
+      ${workout.canExportDiag ? '<button class="btn btn-secondary" id="btn-diag-settings">마지막 운동 진단 기록 저장·공유</button>' : ''}
       <button class="btn btn-danger" id="btn-wipe">모든 기록 지우기</button>
       ${store.storageOk() ? '' : '<p class="small" style="color:var(--danger);margin:0">⚠ 이 브라우저에선 저장이 막혀 있어요(사생활 보호 모드?). 앱을 닫으면 기록이 사라져요.</p>'}
     </div>
@@ -350,6 +426,7 @@ $('settings-body').addEventListener('click', async (e) => {
       NativeTTS?.openInstall?.().catch(() => {});
     }
   }
+  if (e.target.closest('#btn-diag-settings')) exportDiag();
   if (e.target.closest('#btn-wipe')) {
     if (await confirmDialog('모든 기록을 지울까요?', '설정은 남고 운동 기록만 지워져요. 되돌릴 수 없어요.', '모두 지우기')) {
       store.wipe();

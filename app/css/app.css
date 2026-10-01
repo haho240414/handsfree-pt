@@ -197,7 +197,7 @@ body.in-workout .tabbar { display: none; }
 .sticky-bottom .btn { max-width: 528px; margin: 0 auto; }
 body.has-sticky .tabbar { display: none; }
 
-input[type="number"], input[type="text"], select {
+input[type="number"], input[type="text"], select, textarea {
   font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--line);
   border-radius: 10px; padding: 8px 10px; min-height: 40px;
 }
@@ -209,9 +209,9 @@ input[type="number"], input[type="text"], select {
 }
 /* 화면은 캔버스 하나에 '영상 프레임 + 뼈대'를 같이 그린다(분석한 바로 그 프레임에 뼈대가 정확히 겹침).
    비디오 요소는 캔버스 아래에 두고 재생만 담당한다. */
-.workout video, .workout canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.workout canvas { pointer-events: none; }
-.workout.mirror video, .workout.mirror canvas { transform: scaleX(-1); }
+.workout > video, .workout > canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.workout > canvas { pointer-events: none; }
+.workout.mirror > video, .workout.mirror > canvas { transform: scaleX(-1); }
 .wo-top {
   position: absolute; left: 0; right: 0; top: 0; z-index: 2;
   display: flex; align-items: center; gap: 12px;
@@ -231,7 +231,7 @@ input[type="number"], input[type="text"], select {
 }
 .wo-end { background: rgba(255, 90, 95, .9); }
 .wo-center {
-  position: absolute; left: 0; right: 0; bottom: 18%; z-index: 2; text-align: center; pointer-events: none;
+  position: absolute; left: 0; right: 0; bottom: max(18%, calc(var(--wo-lift, 0px) + 8px)); z-index: 2; text-align: center; pointer-events: none;
   text-shadow: 0 2px 18px rgba(0, 0, 0, .55);
   padding: 0 16px;
 }
@@ -243,6 +243,7 @@ input[type="number"], input[type="text"], select {
 .wo-count.bump { animation: bump .28s ease-out; }
 @keyframes bump { 0% { transform: scale(1.14); } 100% { transform: scale(1); } }
 .wo-count.rest { color: #fff; font-size: clamp(88px, 30vw, 220px); }
+.wo-count.tentative { color: rgba(255, 255, 255, .5); }
 .wo-message { font-size: clamp(18px, 5vw, 30px); font-weight: 700; margin-top: 6px; }
 .wo-cue {
   display: inline-block; margin-top: 12px; padding: 10px 18px; border-radius: 999px;
@@ -253,6 +254,21 @@ input[type="number"], input[type="text"], select {
   padding: 26px 14px calc(14px + var(--safe-b));
   background: linear-gradient(to top, rgba(0, 0, 0, .7), transparent);
 }
+/* 템포: 힘주기(라임)·돌아오기(파랑) 시간과 속도. 2~3m 밖에서도 읽히게 글자를 크게 */
+.wo-tempo {
+  margin-bottom: 10px; padding: 8px 12px 10px; border-radius: 14px;
+  background: rgba(0, 0, 0, .45); backdrop-filter: blur(6px);
+}
+.wo-tempo-text {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px;
+  font-size: clamp(15px, 4.3vw, 26px); font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.wo-tempo-text .con { color: var(--wo-accent); }
+.wo-tempo-text .ecc { color: #5ab8ff; }
+.wo-tempo-text .spd { color: #fff; }
+.wo-tempo-text .loss { color: #ffb020; }
+.wo-tempo-text .lbl { color: rgba(255, 255, 255, .7); font-size: .8em; font-weight: 700; }
+.wo-tempo canvas { display: block; width: 100%; height: clamp(44px, 7vh, 76px); margin-top: 6px; }
 .wo-sets { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
 .wo-sets::-webkit-scrollbar { display: none; }
 .wo-set-chip {
@@ -275,7 +291,7 @@ input[type="number"], input[type="text"], select {
   white-space: pre-wrap; pointer-events: none;
 }
 @media (orientation: landscape) {
-  .wo-center { bottom: 16%; }
+  .wo-center { bottom: max(16%, calc(var(--wo-lift, 0px) + 6px)); }
   .wo-count { font-size: clamp(100px, 26vh * 1.2, 260px); }
 }
 
@@ -296,6 +312,17 @@ input[type="number"], input[type="text"], select {
 .set-main .v { font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums; }
 .set-main .q { font-size: 12px; color: var(--text-2); }
 .set-main .q.warn { color: var(--warn); }
+/* 템포: 반복별 힘주기 속도 막대 + 평균 */
+.tempo-row { display: flex; align-items: flex-end; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.tempo-bars { height: 30px; flex: none; }
+.tempo-bars rect.con, .tempo-legend .sw.con { fill: var(--accent-text); background: var(--accent-text); }
+.tempo-bars rect.slow, .tempo-legend .sw.slow { fill: var(--warn); background: var(--warn); }
+.tempo-bars rect.none { fill: var(--line); }
+.tempo-txt { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.tempo-legend { margin: 2px 4px 0; }
+.tempo-legend .sw { display: inline-block; width: 8px; height: 10px; border-radius: 2px; margin: 0 4px 0 2px; vertical-align: -1px; }
+.diag-card { margin-top: 12px; display: flex; flex-direction: column; gap: 2px; }
+textarea { width: 100%; resize: vertical; min-height: 72px; line-height: 1.4; }
 .set-edit { display: flex; gap: 6px; }
 .mini-btn {
   min-width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2);

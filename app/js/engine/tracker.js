@@ -2,10 +2,11 @@
 // 모든 운동의 카운터를 동시에 돌리고, 조건을 통과한 반복이 같은 운동으로 연속 N회 나오면 그 운동으로 확정한다.
 // 브라우저/Node 공용 순수 로직 (앱과 test/eval.mjs 가 같은 코드를 쓴다).
 
-import { computeFeatures, SMOOTH_KEYS } from './features.js';
+import { computeFeatures, SMOOTH_KEYS, uprightAxis, rotationTo, rotatePoints, REF_UP } from './features.js';
 import { FeatureSmoother } from './filters.js';
 import { RepCounter, median } from './counter.js';
 import { EXERCISES, EXERCISE_BY_ID } from './exercises.js';
+import { measureRep, toPhases, summarize } from './tempo.js';
 
 export const TRACKER_DEFAULTS = {
   lockReps: 2,      // 자동 인식: 같은 운동의 유효 반복이 이만큼 이어지면 확정
@@ -25,7 +26,16 @@ export const TRACKER_DEFAULTS = {
   candidates: null, // 오늘 할 운동 목록 — 이 안에서만 자동 인식 (헬스장 루틴용)
   cueRepeat: 3,     // 같은 자세 지적은 최소 이만큼 반복 뒤에 다시
   logLimit: 3000,
+  // 폰 기울기 보정. 앱은 폰의 기울기 센서로 잰 '카메라 좌표의 위쪽'을 cameraUp 으로 넣는다(가장 정확).
+  // 몸 자세로 추정하는 방법(calibrate)은 발 깊이 추정이 부정확해 기울지 않은 영상에서도 20~37° 틀려서 기본으로 끈다.
+  cameraUp: null,
+  calibrate: false, // 가만히 똑바로 선 순간의 몸 방향으로 폰 기울기를 추정해 보정 (실험용)
+  maxTiltCorr: 40,  // 이보다 크게 기운 표본은 잘못 본 것으로 보고 버린다(도)
+  minCorr: 4,       // 평소 모습(REF_UP)과 이보다 덜 다르면 보정하지 않는다(도)
+  calibMinSamples: 15, // 표본이 이만큼(≈1초) 모인 뒤에만 보정
 };
+
+const DEG = 180 / Math.PI;
 
 export class Tracker {
   constructor(opts = {}) {
@@ -49,6 +59,60 @@ export class Tracker {
     this.holdSince = null;
     this.holdLastOk = null;
     this.t = 0;
+    this.up = REF_UP.slice(); // 선 자세 몸 축 추정 (처음엔 '평소 모습' = 폰을 똑바로 세웠다고 가정)
+    this.rot = null;        // null = 보정 없음 (측정한 선 자세 축 → 평소 모습으로 돌리는 회전)
+    this.upSamples = 0;
+    this.upBuf = [];
+    this.hipHist = [];      // 최근 0.6초 화면상 엉덩이 위치 (가만히 서 있는지)
+    if (this.o.cameraUp) this.setCameraUp(this.o.cameraUp);
+    if (this.o.initialUp) { // 이전에 잰 기울기로 시작 (같은 자리에서 이어서 운동할 때)
+      this.up = this.o.initialUp.slice();
+      this.upBuf = Array.from({ length: this.o.calibMinSamples }, () => this.up.slice());
+      this.rot = this.tiltDeg > this.o.minCorr ? rotationTo(this.up) : null;
+    }
+  }
+
+  /**
+   * 폰 기울기 센서 값으로 보정: up = 카메라 좌표(x 오른쪽, y 아래, z 화면 안쪽)에서 본 진짜 위쪽 단위벡터.
+   * 3° 미만이면 보정하지 않는다.
+   */
+  setCameraUp(up) {
+    const n = Math.hypot(...up);
+    if (!n) return;
+    this.sensorUp = up.map((v) => v / n);
+    const deg = Math.acos(Math.max(-1, Math.min(1, -this.sensorUp[1]))) * DEG;
+    this.rot = deg > 3 ? rotationTo(this.sensorUp, [0, -1, 0]) : null;
+  }
+
+  /** 폰이 몇 도 기울어 있다고 보는지 (센서 값이 있으면 센서, 아니면 몸 자세 추정 vs 시범 영상의 평소 모습) */
+  get tiltDeg() {
+    if (this.sensorUp) return Math.acos(Math.max(-1, Math.min(1, -this.sensorUp[1]))) * DEG;
+    const d = this.up[0] * REF_UP[0] + this.up[1] * REF_UP[1] + this.up[2] * REF_UP[2];
+    return Math.acos(Math.max(-1, Math.min(1, d))) * DEG;
+  }
+
+  // 가만히 똑바로 선 순간들의 몸 축을 모아(최근 60개) 성분별 중앙값으로 위쪽을 추정한다 — 튀는 프레임에 강하다.
+  // 걸어오는 중(실측: 덤벨 컬 영상에서 37° 오추정)은 화면상 엉덩이가 움직이므로 뺀다.
+  _calibrate(t, lm, wl) {
+    const hx = (lm[23].x + lm[24].x) / 2, hy = (lm[23].y + lm[24].y) / 2;
+    const tor = Math.hypot((lm[11].x + lm[12].x) / 2 - hx, (lm[11].y + lm[12].y) / 2 - hy);
+    this.hipHist.push([t, hx, hy]);
+    while (this.hipHist.length && this.hipHist[0][0] < t - 0.6) this.hipHist.shift();
+    const xs = this.hipHist.map((h) => h[1]), ys = this.hipHist.map((h) => h[2]);
+    const moved = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+    if (this.hipHist.length < 4 || !(moved < 0.12 * tor)) return;
+    const axis = uprightAxis(lm, wl);
+    if (!axis) return;
+    const offCam = Math.acos(Math.max(-1, Math.min(1, -axis[1]))) * DEG;
+    if (offCam > this.o.maxTiltCorr) return;
+    this.upBuf.push(axis);
+    if (this.upBuf.length > 60) this.upBuf.shift();
+    this.upSamples++;
+    if (this.upBuf.length < this.o.calibMinSamples) return;
+    const med = [0, 1, 2].map((i) => median(this.upBuf.map((a) => a[i])));
+    const n = Math.hypot(...med);
+    this.up = med.map((v) => v / n);
+    this.rot = this.tiltDeg > this.o.minCorr ? rotationTo(this.up) : null;
   }
 
   /**
@@ -61,8 +125,11 @@ export class Tracker {
     const ev = [];
     this.t = t;
     let f = null;
+    this.lastRaw = null; // 가시성이 낮아 '사람'으로 안 쳐도 보이는 부위는 알려준다 (화면 구도 안내용)
     if (lm && wl) {
-      const raw = computeFeatures(lm, wl);
+      if (this.o.calibrate && !this.sensorUp) this._calibrate(t, lm, wl);
+      const raw = computeFeatures(lm, rotatePoints(wl, this.rot));
+      this.lastRaw = raw;
       if (raw.visAll >= this.o.minVis) {
         f = this.smoother.update(t, raw);
         f.t = t;
@@ -87,6 +154,7 @@ export class Tracker {
         if (rep) this._candidate(ex, rep, ev);
       }
       if (this.holdSpec) this._hold(t, f, ev);
+      if (this.state === 'reps') this._tempo(ev, false);
     }
     this._maybeEndSet(t, ev);
     return ev;
@@ -106,10 +174,21 @@ export class Tracker {
     const w = this._window(rep.tStart - 0.2, rep.tEnd);
     const b = this._window(rep.tBottom - 0.25, rep.tBottom + 0.25);
     const fixed = this.o.fixed === ex.id;
-    const checks = ex.check(w, b, rep).map(([name, ok, soft]) => ({ name, ok: !!ok, soft: !!soft }));
-    const valid = checks.every((c) => c.ok || (fixed && c.soft));
+    // 결과: true 통과 / false 탈락 / null 모름(그 부위가 안 보임)
+    const checks = ex.check(w, b, rep).map(([name, res, kind]) => ({
+      name, res: res === true ? true : res === false ? false : null, kind: kind === true ? 'soft' : kind || null,
+    }));
+    const valid = checks.every((c) => {
+      if (c.kind === 'core') return fixed ? c.res !== false : c.res === true; // 핵심: 자동은 확인돼야, 직접 고르면 아니라고만 안 나오면
+      if (fixed) return true;                                                    // 직접 고른 운동은 핵심 조건만 본다
+      return c.res !== false;                                                    // 자동: 탈락만 막고 모름은 넘어간다
+    });
     if (this.log.length < this.o.logLimit) {
-      this.log.push({ ex: ex.id, ...rep, valid, failed: checks.filter((c) => !c.ok).map((c) => c.name) });
+      this.log.push({
+        ex: ex.id, ...rep, valid,
+        failed: checks.filter((c) => c.res === false || (c.kind === 'core' && c.res === null && !fixed))
+          .map((c) => (c.res === null ? `${c.name}(안 보임)` : c.name)),
+      });
     }
     if (!valid) return;
     this.counters[ex.id].accept(rep.amp);
@@ -156,6 +235,25 @@ export class Tracker {
     s.lastRepT = r.tEnd;
     this.valid = {};
     ev.push({ type: 'rep', exercise: s.exercise, count: s.count, issues: r.issues, cue: this._cue(), t: this.t });
+  }
+
+  // 템포: 센 반복이 다 올라와 끝나면(위에서 멈추거나 다음 반복을 시작하면) 힘주기·돌아오기 시간과 속도를 잰다.
+  // final = 세트가 끝나서 더 기다릴 수 없음. 잴 수 없으면 null 로 남긴다.
+  _tempo(ev, final) {
+    const s = this.set;
+    const ex = EXERCISE_BY_ID[s.exercise];
+    if (!ex?.tempo) return;
+    for (let i = 0; i < s.reps.length; i++) {
+      const r = s.reps[i];
+      if (r.tempo !== undefined) continue;
+      const next = s.reps[i + 1];
+      const pts = this._window(r.tStart - 0.6, next ? next.tStart + 0.3 : this.t)
+        .map((f) => ({ t: f.t, s: ex.signal(f), d: ex.tempo.dist ? ex.tempo.dist(f) : NaN }));
+      const m = measureRep(pts, r, { final: final || !!next, minRange: 0.6 * ex.prom });
+      if (!m && !final && !next) continue;
+      r.tempo = toPhases(m, ex.tempo.first);
+      if (r.tempo) ev.push({ type: 'tempo', exercise: s.exercise, index: i, tempo: r.tempo, t: this.t });
+    }
   }
 
   // 자세 지적 정책: 최근 3회 중 2회 이상 같은 문제 + 최근 cueRepeat회 안에 같은 말을 안 했을 때만 (잔소리 방지)
@@ -262,6 +360,7 @@ export class Tracker {
   _endSet(ev, reason) {
     const s = this.set;
     let rec = null;
+    if (s.kind === 'reps') this._tempo(ev, true);
     if (s.kind === 'reps' && s.count >= this.o.minSetReps) {
       const issues = {};
       for (const r of s.reps) for (const code of r.issues || []) issues[code] = (issues[code] || 0) + 1;
@@ -271,6 +370,10 @@ export class Tracker {
         startT: round2(s.startT), endT: round2(s.lastRepT),
         repTimes: s.reps.map((r) => round2(r.tEnd)),
       };
+      if (EXERCISE_BY_ID[s.exercise]?.tempo) {
+        rec.tempo = s.reps.map((r) => r.tempo ?? null);
+        rec.tempoSum = summarize(rec.tempo);
+      }
     } else if (s.kind === 'hold' && s.holdSec >= this.o.holdMin) {
       rec = {
         exercise: s.exercise, kind: 'hold', holdSec: Math.round(s.holdSec), issues: { ...s.issueSec },
@@ -309,7 +412,23 @@ export class Tracker {
       count: s?.kind === 'reps' ? s.count : 0,
       holdSec: s?.kind === 'hold' ? s.holdSec : 0,
       features: this.lastF,
+      raw: this.lastRaw,
+      tiltDeg: this.tiltDeg,
+      pending: this._pending(),
+      tempo: s?.kind === 'reps' ? s.reps.map((r) => r.tempo ?? null) : null,
     };
+  }
+
+  /** 확정 전(자동 인식에서 1회째) 가장 최근에 맞아 보인 운동 — 화면에 '○○ 같아요'로 보여준다 */
+  _pending() {
+    if (this.state !== 'search') return null;
+    let best = null;
+    for (const [id, list] of Object.entries(this.valid)) {
+      const last = list[list.length - 1];
+      if (!last || this.t - last.tEnd > 6) continue;
+      if (!best || last.tEnd > best.t) best = { exercise: id, count: list.length, t: last.tEnd };
+    }
+    return best;
   }
 }
 

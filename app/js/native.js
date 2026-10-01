@@ -17,3 +17,24 @@ export async function shareTextFile(name, text) {
   await NativeShare.share({ title: '핸즈프리 PT 백업', url: uri, dialogTitle: '백업 파일 저장' });
 }
 export const canShareFile = !!(NativeShare && NativeFS);
+
+/**
+ * 바이너리 파일(진단 기록 .gz 등)을 공유 창으로 내보내기.
+ * 브리지로 한 번에 넘기기엔 커서(수 MB) 3MB씩 base64 로 나눠 이어 쓴다(3의 배수라 조각마다 따로 해독돼도 이어짐).
+ */
+export async function shareBinaryFile(name, bytes, title = '핸즈프리 PT 진단 기록') {
+  const PIECE = 3 * 1024 * 1024;
+  const b64 = (u8) => {
+    let s = '';
+    for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+    return btoa(s);
+  };
+  let uri = null;
+  for (let off = 0; off < bytes.length || off === 0; off += PIECE) {
+    const data = b64(bytes.subarray(off, off + PIECE));
+    if (off === 0) ({ uri } = await NativeFS.writeFile({ path: name, data, directory: 'CACHE' }));
+    else await NativeFS.appendFile({ path: name, data, directory: 'CACHE' });
+    if (bytes.length === 0) break;
+  }
+  await NativeShare.share({ title, url: uri, dialogTitle: '진단 기록 보내기' });
+}

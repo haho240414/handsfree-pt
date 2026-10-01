@@ -2,8 +2,11 @@
 
 import { Tracker } from './engine/tracker.js';
 import { EXERCISE_BY_ID } from './engine/exercises.js';
+import { summarize as tempoSummary, speeds as tempoSpeeds } from './engine/tempo.js';
 import { createPoseLandmarker, BONES, JOINTS } from './pose.js';
 import { Voice, nativeKorean } from './voice.js';
+import { TiltSensor } from './tilt.js';
+import { DiagRecorder } from './diag.js';
 import * as store from './store.js';
 
 const $ = (id) => document.getElementById(id);
@@ -15,6 +18,8 @@ const fmtClock = (sec) => {
 };
 
 const landmarkers = {}; // 모델별로 한 번만 만든다
+const sec = (v) => (v == null ? '-' : `${v.toFixed(1)}초`);
+const median = (xs) => { const a = xs.filter(Number.isFinite).sort((x, y) => x - y); return a.length ? a[a.length >> 1] : NaN; };
 
 // GPU 안전장치: GPU 로 AI 를 켜는 동안 앱이 통째로 멈추면(일부 폰·에뮬레이터 실측) 다음 실행 때 호환 모드로 바꾼다.
 // 켜기 직전 'starting' 을 적고, 60프레임을 무사히 처리하면 지운다. 앱을 스스로 내린 경우도 지운다.
@@ -28,6 +33,8 @@ export class Workout {
   constructor({ onDone }) {
     this.onDone = onDone;
     this.voice = new Voice();
+    this.tilt = new TiltSensor();
+    this.diag = new DiagRecorder();
     this.running = false;
     this.el = {
       screen: $('screen-workout'), video: $('cam'), canvas: $('skeleton'),
@@ -35,6 +42,7 @@ export class Workout {
       exercise: $('wo-exercise'), count: $('wo-count'), message: $('wo-message'), cue: $('wo-cue'),
       sets: $('wo-sets'), debug: $('wo-debug'), loading: $('wo-loading'), loadingText: $('wo-loading-text'),
       voiceBtn: $('btn-voice'), endBtn: $('btn-end'),
+      tempo: $('wo-tempo'), tempoText: $('wo-tempo-text'), tempoCanvas: $('wo-tempo-canvas'), bottom: $('wo-bottom'),
     };
     this.el.endBtn.addEventListener('click', () => this.end());
     this.el.voiceBtn.addEventListener('click', () => {
@@ -54,6 +62,7 @@ export class Workout {
     this.voice.enabled = st.voice;
     this.voice.style = st.countStyle;
     this.voice.unlock(); // 시작 버튼 탭 안에서 소리 잠금 해제
+    if (!source) this.tilt.start(); // 폰 기울기 센서 (iOS 는 이 탭 안에서 권한을 물어야 함)
     this.el.voiceBtn.textContent = this.voice.enabled ? '🔊' : '🔇';
     this.cfg = { cues: st.cues, rest: st.rest, debug: st.debug };
     this.isFile = !!source;
@@ -68,6 +77,7 @@ export class Workout {
     this._setText('count', '');
     this._setText('message', '');
     this.el.cue.hidden = true;
+    this._showTempo(false);
 
     this.session = {
       id: store.uid(), start: Date.now(), end: null, sets: [],
@@ -83,6 +93,19 @@ export class Workout {
     this.fps = 0;
     this.fpsT = performance.now();
     this.cueUntil = 0;
+    this.appliedUp = null;   // 마지막으로 보정에 쓴 폰 기울기
+    this.lastTiltDeg = null;
+    this.frameIssue = null;  // 화면 구도 문제 { code, since }
+    this.frameSaid = {};     // 구도 안내를 말한 횟수 (같은 말은 두 번까지)
+    this.lastFrameSay = -Infinity;
+    this.lastTempo = null;   // 쉬는 동안 보여줄 직전 세트 템포
+    if (!source) {
+      this.diag.start({
+        app: 'handsfree-pt', ua: navigator.userAgent, mode: this.session.mode, candidates: candidates || null,
+        settings: { model: st.model, gpu: st.gpu, mirror: st.mirror, lockReps: st.lockReps },
+        screen: { w: screen.width, h: screen.height, dpr: window.devicePixelRatio },
+      });
+    }
 
     try {
       await this._openSource(source);
@@ -94,6 +117,7 @@ export class Workout {
         onStatus: (s) => { this.el.loadingText.textContent = s; },
       });
       this.landmarker = landmarkers[key];
+      this.diag.event(0, 'ready', { delegate: this.landmarker?.delegate ?? null, video: [this.el.video.videoWidth, this.el.video.videoHeight] });
     } catch (e) {
       console.error(e);
       if (this.session) this._fail(e);
@@ -214,6 +238,7 @@ export class Workout {
     const lm = res.landmarks?.[0] || null;
     const wl = res.worldLandmarks?.[0] || null;
     const t = this.isFile ? mediaTime : (now - this.t0) / 1000;
+    if (!this.isFile) this.diag.add(t, lm, wl);
     const events = this.tracker.update(t, lm, wl);
     this.frames++;
     this.totalFrames = (this.totalFrames || 0) + 1;
@@ -229,6 +254,10 @@ export class Workout {
   }
 
   _onEvent(e) {
+    if (!this.isFile && e.type !== 'holdTick' && e.type !== 'tempo') {
+      this.diag.event(e.t ?? this.tracker.t, e.type, e.type === 'setEnd' ? { exercise: e.set.exercise, reps: e.set.reps ?? null, holdSec: e.set.holdSec ?? null }
+        : { exercise: e.exercise ?? null, count: e.count ?? null });
+    }
     if (this.quiet && e.type !== 'setEnd') return this._onEventQuiet(e);
     const name = exName(e.exercise);
     const cueText = this.cfg.cues && e.cue ? e.cue.text : '';
@@ -265,6 +294,7 @@ export class Workout {
         }
         break;
       case 'setEnd':
+        if (e.set.tempo) this.lastTempo = { exercise: e.set.exercise, list: e.set.tempo, sum: e.set.tempoSum };
         this._recordSet(e.set, e.reason === 'finish');
         break;
       default:
@@ -283,6 +313,7 @@ export class Workout {
       reps: s.reps ?? null, holdSec: s.holdSec ?? null, good: s.good ?? null, issues: s.issues || {},
       weight: store.lastWeight(s.exercise), start: Math.round(toMs(s.startT)), end: Math.round(toMs(s.endT)),
     };
+    if (s.tempo) { rec.tempo = s.tempo; rec.tempoSum = s.tempoSum; }
     this.session.sets.push(rec);
     store.upsertSession(this.session);
     this.setCount[s.exercise] = (this.setCount[s.exercise] || 0) + 1;
@@ -308,6 +339,7 @@ export class Workout {
 
   _tick() {
     const now = performance.now();
+    if (!this.isFile && this.running) this._applyTilt(now);
     const elapsed = this.isFile ? (this.progress || 0) * (this.el.video.duration || 0) : (now - this.t0) / 1000;
     this._setText('clock', fmtClock(elapsed));
     if (this.restUntil) {
@@ -331,46 +363,206 @@ export class Workout {
 
   _hud() {
     const snap = this.tracker.snapshot();
-    const f = snap.features;
     const now = performance.now();
+    const active = snap.state === 'reps' || snap.state === 'hold';
+    const frame = this.isFile ? null : this._framing(snap);
     let dot = 'warn', status, message = '';
     if (this.isFile) {
       status = `영상 분석 중 ${Math.round((this.progress || 0) * 100)}%`;
       dot = snap.present ? 'ok' : 'warn';
+      if (!snap.present) message = '사람이 안 보이는 구간';
     } else if (!snap.present) {
-      status = '사람을 찾는 중';
-      message = '전신이 보이게 2~3m 뒤로 가 주세요';
-    } else if (f?.cutoff) {
-      status = `인식 중 · ${this.fps}fps`;
-      message = '몸 일부가 화면 밖이에요. 조금 더 뒤로';
-      dot = 'ok';
+      status = snap.raw ? '몸이 덜 보여요' : '사람을 찾는 중';
+      message = frame?.text || '전신이 보이게 2~3m 뒤로 가 주세요';
     } else {
       status = `인식 중 · ${this.fps}fps`;
       dot = 'ok';
+      message = frame?.text || '';
     }
-    if (this.isFile && !snap.present) message = '사람이 안 보이는 구간';
     this.el.dot.className = `dot ${dot}`;
     this._setText('status', status);
+    if (!active) this._sayFraming(frame, now);
 
-    if (snap.state === 'reps' || snap.state === 'hold') {
+    const count = this.el.count;
+    if (active) {
       const no = (this.setCount[snap.exercise] || 0) + 1;
       this._setText('exercise', `${exName(snap.exercise)} · ${no}세트`);
       this._setText('count', snap.state === 'hold' ? `${Math.floor(snap.holdSec)}초` : String(snap.count));
-      this.el.count.classList.remove('rest');
+      count.classList.remove('rest', 'tentative');
       this._setText('message', snap.present ? '' : message);
+    } else if (snap.pending) {
+      // 자동 인식: 1회째는 아직 확정 전 — 알아챘다는 걸 바로 보여준다
+      const left = this.tracker.o.lockReps - snap.pending.count;
+      this._setText('exercise', `${exName(snap.pending.exercise)} 같아요`);
+      this._setText('count', String(snap.pending.count));
+      count.classList.remove('rest');
+      count.classList.add('tentative');
+      this._setText('message', `${left === 1 ? '한' : left}번 더 하면 세기 시작해요`);
     } else if (this.restUntil) {
       const left = Math.ceil((this.restUntil - now) / 1000);
       this._setText('exercise', '휴식');
       this._setText('count', fmtClock(left));
-      this.el.count.classList.add('rest');
+      count.classList.remove('tentative');
+      count.classList.add('rest');
       this._setText('message', '다음 세트는 그냥 시작하면 알아서 세요');
     } else {
       this._setText('exercise', '');
       this._setText('count', '');
-      this.el.count.classList.remove('rest');
+      count.classList.remove('rest', 'tentative');
       this._setText('message', message || (this.session.sets.length ? '다음 운동을 시작하세요' : '운동을 시작하세요'));
     }
+    this._drawTempo(snap);
     if (this.cfg.debug) this._debug(snap);
+  }
+
+  // 화면 구도: 안 보이는 부위에 따라 어떻게 하면 되는지. speak = 소리로도 알려줄 만큼 중요한지
+  _framing(snap) {
+    const raw = snap.raw;
+    if (!raw) return null;
+    const s = raw.seen || {};
+    if (raw.torsoFrac > 0.42) return { code: 'close', text: '너무 가까워요. 두세 걸음 뒤로 가 주세요', speak: true };
+    if (!s.knees) return { code: 'knees', text: '무릎까지 보이게 뒤로 가거나 폰을 낮춰 주세요', speak: true };
+    if (!s.head) return { code: 'head', text: '머리까지 보이게 폰을 세우거나 뒤로 가 주세요', speak: true };
+    if (raw.cutoff) return { code: 'edge', text: '몸 일부가 화면 밖이에요. 화면 가운데로 와 주세요', speak: false };
+    if (!s.feet) return { code: 'feet', text: '발까지 보이면 하체 운동을 더 잘 세요', speak: false };
+    return null;
+  }
+
+  // 구도 안내 음성: 첫 세트를 기록하기 전(자리 잡는 중)에만, 3초 넘게 계속될 때, 같은 말은 두 번까지, 12초 간격
+  _sayFraming(frame, now) {
+    if (!frame) { this.frameIssue = null; return; }
+    if (this.frameIssue?.code !== frame.code) this.frameIssue = { code: frame.code, since: now };
+    if (!frame.speak || this.session.sets.length || this.isFile) return;
+    if (now - this.frameIssue.since < 3000 || now - this.lastFrameSay < 12000) return;
+    if ((this.frameSaid[frame.code] || 0) >= 2) return;
+    this.frameSaid[frame.code] = (this.frameSaid[frame.code] || 0) + 1;
+    this.lastFrameSay = now;
+    this.voice.say(frame.text);
+  }
+
+  // 폰 기울기 센서로 3D 좌표를 바로 세운다 (1.5° 넘게 바뀔 때만 — 세트 중 판정이 흔들리지 않게)
+  _applyTilt(now) {
+    const up = this.tilt.cameraUp();
+    if (!up) return;
+    const p = this.appliedUp;
+    if (p && up[0] * p[0] + up[1] * p[1] + up[2] * p[2] > Math.cos((1.5 * Math.PI) / 180)) return;
+    this.appliedUp = up;
+    this.tracker.setCameraUp(up);
+    this.session.tilt = this.lastTiltDeg = Math.round(this.tilt.pitchDeg());
+    this.diag.event((now - this.t0) / 1000, 'tilt', up.map((v) => Math.round(v * 10000) / 10000));
+  }
+
+  // 템포 패널: 세트 중엔 '힘주기·돌아오기' 속도 곡선 + 반복별 속도 막대, 쉬는 동안엔 직전 세트 막대와 평균
+  _drawTempo(snap) {
+    const live = snap.state === 'reps' && EXERCISE_BY_ID[snap.exercise]?.tempo;
+    const rest = !live && !snap.pending && this.restUntil && this.lastTempo;
+    if (!live && !rest) { this._showTempo(false); return; }
+    const exId = live ? snap.exercise : this.lastTempo.exercise;
+    const def = EXERCISE_BY_ID[exId].tempo;
+    const list = live ? snap.tempo : this.lastTempo.list;
+    const sum = live ? tempoSummary(list) : this.lastTempo.sum;
+    const last = live ? [...list].reverse().find(Boolean) : null;
+    this._showTempo(true);
+
+    const x = last || sum;
+    let html = '';
+    if (x) {
+      html = `${rest ? '<span class="lbl">평균</span>' : ''}<span class="con">${def.con} ${sec(x.con)}</span><span class="ecc">${def.ecc} ${sec(x.ecc)}</span>`;
+      const spd = last ? last.conSpeed : sum.speed;
+      if (spd != null) html += `<span class="spd">${spd.toFixed(2)}m/s</span>`;
+      if (sum?.loss >= 15) html += `<span class="loss">속도 −${sum.loss}%</span>`;
+    } else {
+      html = `<span class="lbl">${def.con}·${def.ecc} 속도 재는 중</span>`;
+    }
+    if (this.el.tempoText.innerHTML !== html) {
+      this.el.tempoText.innerHTML = html;
+      this._liftCenter();
+    }
+
+    const c = this.el.tempoCanvas;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const W = Math.round(c.clientWidth * dpr), H = Math.round(c.clientHeight * dpr);
+    if (!W || !H) return;
+    if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
+    const g = c.getContext('2d');
+    g.clearRect(0, 0, W, H);
+    const LIME = '#c8f53c', BLUE = '#5ab8ff', WARN = '#ffb020';
+    const gap = 10 * dpr;
+    const curveW = live ? Math.round(W * 0.6) : 0;
+
+    // 속도 곡선(최근 6초): 위 = 힘주는 쪽(라임), 아래 = 돌아오는 쪽(파랑). 단위는 '한 번 움직이는 폭/초'
+    if (live) {
+      const ex = EXERCISE_BY_ID[exId];
+      const reps = this.tracker.set?.reps || [];
+      const range = median(reps.map((r) => r.top - r.bottom)) || 2 * ex.prom;
+      const dir = def.first === 'con' ? -1 : 1;
+      const buf = this.tracker.buf;
+      const tEnd = buf.length ? buf[buf.length - 1].t : 0;
+      const pts = [];
+      for (let i = buf.length - 1; i >= 0 && buf[i].t >= tEnd - 6.3; i--) {
+        const v = ex.signal(buf[i]);
+        if (Number.isFinite(v)) pts.push({ t: buf[i].t, s: v });
+      }
+      pts.reverse();
+      const vel = [];
+      for (let i = 1; i < pts.length - 1; i++) {
+        const dt = pts[i + 1].t - pts[i - 1].t;
+        if (dt > 0) vel.push({ t: pts[i].t, v: (dir * (pts[i + 1].s - pts[i - 1].s)) / dt / range });
+      }
+      const sm = vel.map((p, i) => ({ t: p.t, v: (vel[Math.max(0, i - 1)].v + p.v + vel[Math.min(vel.length - 1, i + 1)].v) / 3 }));
+      const scale = Math.max(1.2, ...sm.map((p) => Math.abs(p.v)));
+      const mid = H / 2;
+      const X = (t) => ((t - (tEnd - 6)) / 6) * curveW;
+      const Y = (v) => mid - (v / scale) * (mid - 3 * dpr);
+      g.strokeStyle = 'rgba(255,255,255,.25)';
+      g.lineWidth = dpr;
+      g.beginPath(); g.moveTo(0, mid); g.lineTo(curveW, mid); g.stroke();
+      for (const [sign, color] of [[1, LIME], [-1, BLUE]]) {
+        if (sm.length < 2) break;
+        g.beginPath();
+        g.moveTo(X(sm[0].t), mid);
+        for (const p of sm) g.lineTo(X(p.t), Y(sign > 0 ? Math.max(0, p.v) : Math.min(0, p.v)));
+        g.lineTo(X(sm[sm.length - 1].t), mid);
+        g.closePath();
+        g.fillStyle = color;
+        g.globalAlpha = 0.85;
+        g.fill();
+        g.globalAlpha = 1;
+      }
+    }
+
+    // 반복별 힘주기 속도 막대 (처음 빠른 반복보다 20% 넘게 느려지면 주황)
+    const sp = tempoSpeeds(list);
+    const vals = list.map((x) => (x ? (sp.metric ? x.conSpeed : x.conRate) : null)).slice(-12);
+    const x0 = live ? curveW + gap : 0;
+    const bw = W - x0;
+    const n = Math.max(vals.length, live ? 6 : 1);
+    const slot = bw / n;
+    const top = Math.max(...vals.filter((v) => v != null), 1e-9);
+    const valid = vals.filter((v) => v != null);
+    const best = valid.length ? Math.max(...valid.slice(0, 3)) : 0;
+    vals.forEach((v, i) => {
+      const bx = x0 + i * slot + slot * 0.18;
+      const w = slot * 0.64;
+      const h = v == null ? 3 * dpr : Math.max(3 * dpr, (v / top) * (H - 4 * dpr));
+      g.fillStyle = v == null ? 'rgba(255,255,255,.3)' : v < 0.8 * best && i >= 1 ? WARN : LIME;
+      g.fillRect(bx, H - h, w, h);
+    });
+  }
+
+  _showTempo(on) {
+    if (this.el.tempo.hidden === !on) return;
+    this.el.tempo.hidden = !on;
+    this._liftCenter();
+  }
+
+  // 아래쪽(템포 패널·세트 칩)이 커지면 큰 숫자를 그만큼 위로 올려 겹치지 않게
+  _liftCenter() {
+    const h = this.el.bottom.offsetHeight;
+    if (h !== this.lift) {
+      this.lift = h;
+      this.el.screen.style.setProperty('--wo-lift', `${h}px`);
+    }
   }
 
   _debug(snap) {
@@ -378,10 +570,23 @@ export class Workout {
     const n = (x, d = 0) => (Number.isFinite(x) ? x.toFixed(d) : '-');
     const recent = this.tracker.log.slice(-4).map((c) =>
       `${c.valid ? '✔' : '·'} ${c.ex} ${n(c.amp, 2)} ${c.failed.join('/')}`).join('\n');
+    const pitch = this.tilt.pitchDeg();
     this.el.debug.textContent =
       `모델 ${this.landmarker?.delegate ?? ''} ${this.fps}fps · 상태 ${snap.state}\n`
+      + `폰 기울기 ${pitch == null ? '센서 없음' : `${n(pitch)}°(보정 ${n(snap.tiltDeg)}°)`}\n`
       + `무릎 ${n(f.knee)} 엉덩이 ${n(f.hip)} 팔꿈치 ${n(f.elbow)} 몸통 ${n(f.torsoTilt)}\n`
       + `엉덩이높이 ${n(f.hipH, 2)} 손목높이 ${n(f.wristH, 2)} 가시성 ${n(f.visAll, 2)}\n${recent}`;
+  }
+
+  /** 마지막 운동의 진단 기록 파일 (관절 좌표만) */
+  get canExportDiag() { return this.diag.hasData; }
+  exportDiag(note) {
+    return this.diag.exportFile({
+      note,
+      sets: this.tracker?.sets || [],
+      log: (this.tracker?.log || []).slice(-1500),
+      extra: { fps: this.fps, delegate: this.landmarker?.delegate ?? null, tilt: this.lastTiltDeg ?? null },
+    });
   }
 
   _draw(lm) {
@@ -473,6 +678,7 @@ export class Workout {
   _close() {
     this.running = false;
     clearInterval(this.ticker);
+    this.tilt.stop();
     this.stream?.getTracks().forEach((tr) => tr.stop());
     this.stream = null;
     const v = this.el.video;
