@@ -226,11 +226,14 @@ export const EXERCISES = [
     id: 'donkey', name: '동키킥', group: '하체', unit: '회', kind: 'reps', priority: 5, verified: false,
     tip: '옆에서 머리~발끝이 보이게',
     // 네발 자세에서 한 다리를 뒤로 차올림. 실측: 차는 다리 엉덩이 각 92~98° → 131~142°, 몸통 82~86°, 팔은 편 채
+    // 처음 본 영상(donkey_puregym)은 쉬는 자세가 113~118° → 156~164°: 사람마다 달라서 절대값 대신 차올린 폭으로
     signal: (f) => -f.hipMax, prom: 25, minDur: 0.5, maxDur: 6,
     tempo: { first: 'con', con: '차올리기', ecc: '내리기' },
     check: (w) => [
       ['네발 자세(엎드려 팔로 지탱)', and(gt(M(w, 'torsoTilt'), 60), gt(P(w, 'shoulderOverWrist', 10), 0.3), faceDown(w)), 'core'],
-      ['다리를 뒤로 차올림', and(gt(P(w, 'hipMax', 90), 120), lt(P(w, 'hipMax', 10), 112)), 'core'],
+      ['다리를 뒤로 차올림', and(gt(P(w, 'hipMax', 90), 128), gt(R(w, 'hipMax'), 28)), 'core'],
+      // 실측: 더 펴진 무릎 중앙값 동키킥 88~115° / 마운틴 클라이머 151°(한 다리는 늘 펴짐)
+      ['무릎을 꿇은 채(마운틴 클라이머 아님)', lt(M(w, 'kneeMax'), 140)],
       ['팔은 편 채 유지(푸시업 아님)', lt(R(w, 'shoulderOverWrist'), 0.1)],
     ],
   },
@@ -344,6 +347,9 @@ export const EXERCISES = [
       ['팔을 몸통과 수직으로(레이즈·프레스 아님)', and(gt(P(w, 'arm', 10), 45), lt(P(w, 'arm', 90), 145)), 'core'],
       ['팔꿈치는 살짝만 굽힘(프레스 아님)', gt(P(w, 'elbow', 10), 105)],
       ['숙인 자세 아님(리어 델트 플라이 아님)', not(and(between(M(w, 'torsoTilt'), 30, 75), faceDown(w))), 'soft'],
+      // 손이 화면 밖이면 AI 가 손목을 지어내 '손 간격'이 출렁인다(매달려 다리를 드는 근접 장면을 플라이로 셌음):
+      // 플라이는 다리를 움직이지 않으니 엉덩이 각도가 크게 변하면 아니다(그 장면 85~175°)
+      ['하체는 그대로(다리 운동 아님)', lt(R(w, 'hip'), 40)],
     ],
   },
   {
@@ -545,7 +551,8 @@ export const EXERCISES = [
     signal: (f) => f.hip, prom: 40, minDur: 0.6, maxDur: 8,
     tempo: { first: 'con', con: '올리기', ecc: '내리기' },
     check: (w) => [
-      ['누운 자세', gt(M(w, 'torsoTilt'), 55), 'core'],
+      // 실측: 바닥에 누우면 몸통 88~100° / 45° 레그 프레스에 기대면 52~68°(legpress_physio 를 레그 레이즈로 셌음)
+      ['누운 자세', gt(M(w, 'torsoTilt'), 72), 'core'],
       ['다리를 들어올림', lt(P(w, 'hip', 10), 115), 'core'],
       ['상체는 고정(윗몸일으키기 아님)', lt(R(w, 'torsoTilt'), 20), 'core'],
       ['무릎을 편 채', gt(P(w, 'knee', 10), 130)],
@@ -588,8 +595,9 @@ export const EXERCISES = [
     check: (w) => [
       ['앉아서 상체를 뒤로 기울임', and(between(M(w, 'torsoTilt'), 20, 70), between(M(w, 'hip'), 60, 135)), 'core'],
       ['손을 옆으로 보냄', or(gt(P(w, 'handSide', 90), 0.08), lt(P(w, 'handSide', 10), -0.08)), 'core'],
-      // 실측: 바닥에 앉으면 발목이 엉덩이와 비슷한 높이(-0.15~0.07m), 레그 익스텐션 의자는 0.43m 아래
-      ['바닥에 앉음(기구 의자 아님)', lt(M(w, 'hipH'), 0.25)],
+      // 실측: 바닥에 앉으면 발목이 엉덩이와 비슷한 높이(-0.16~0.07m), 레그 익스텐션 의자는 0.43m 아래,
+      // 레그 프레스는 발판이 엉덩이보다 0.25~0.47m 위(안전 손잡이를 풀고 거는 손동작을 러시안 트위스트로 셌음)
+      ['바닥에 앉음(기구 의자·레그 프레스 아님)', between(M(w, 'hipH'), -0.22, 0.25)],
       ['가슴이 위·앞을 향함', gt(M(w, 'chestUp'), 0.15)],
       ['상체는 그대로(윗몸일으키기 아님)', lt(R(w, 'torsoTilt'), 20)],
       ['얼굴이 위(엎드린 자세 아님)', not(faceDown(w))],
@@ -646,6 +654,8 @@ export const EXERCISES = [
       ['엎드려 팔로 지탱', and(gt(M(w, 'torsoTilt'), 60), gt(P(w, 'shoulderOverWrist', 10), 0.3)), 'core'],
       ['팔은 편 채 유지(푸시업 아님)', lt(R(w, 'shoulderOverWrist'), 0.1), 'core'],
       ['무릎을 가슴 쪽으로 당김', lt(P(w, 'kneeMin', 10), 95)],
+      // 실측: 당긴 쪽 엉덩이 56~82° / 엎드려 하는 레그 컬은 무릎만 굽혀 142~159° 그대로(legcurl_yaralla 를 클라이머로 셌음)
+      ['엉덩이도 접힘(엎드린 레그 컬 아님)', lt(P(w, 'hipMin', 10), 110)],
       ['반대 다리는 편 채(네발 자세 동키킥 아님)', gt(P(w, 'hipMax', 10), 125), 'soft'],
     ],
   },
@@ -678,10 +688,14 @@ export const EXERCISES = [
     id: 'highknees', name: '하이니', group: '유산소', unit: '회', kind: 'reps', priority: 6, verified: false,
     tip: '정면이나 옆에서 머리~발끝이 보이게',
     // 제자리에서 무릎을 번갈아 높이 — 한쪽 1회
-    // 실측: 한 번 0.4~0.9초(사이드 런지·불가리안은 2초 안팎), 발은 몸 아래(좌우 0.25m·앞뒤 간격 작음)
-    signal: (f) => f.hipMin, prom: 35, minDur: 0.15, maxDur: 1.2,
+    // 실측: 한 번 0.3~0.9초(사이드 런지·불가리안은 2초 안팎), 발은 몸 아래(좌우 0.25m·앞뒤 간격 작음)
+    // 0.33초마다 바꾸면(highknees_puregym) 다리를 바꾸는 순간이 1프레임뿐이라 중앙값 스무딩이 지운다(20회 중 2회만 셌음)
+    // → 스무딩 안 한 엉덩이 각도로 센다. 원본은 들 때 67~88°, 바꿀 때 133~147°로 크게 출렁인다
+    signal: (f) => f.hipMinFast, prom: 35, minDur: 0.15, maxDur: 1.2,
     check: (w, b) => [
       ['서서 하는 동작', lt(M(w, 'torsoTilt'), 35), 'core'],
+      // 실측: 버티는 다리가 펴져 더 펴진 무릎 중앙값 156~158° / 기구에 앉아 다리를 움직이면 90°(legext_jeet 를 하이니로 셌음)
+      ['한 다리로 서서(앉은 자세 아님)', gt(M(w, 'kneeMax'), 135), 'core'],
       ['무릎을 높이 듦', lt(P(w, 'hipMin', 10), 115), 'core'],
       ['다리를 번갈아(스쿼트 아님)', gt(P(w, 'kneeAsym', 90), 40)],
       ['발은 몸 아래(런지 아님)', and(lt(M(b, 'stanceW'), 0.45), lt(M(b, 'stanceD'), 0.4))],

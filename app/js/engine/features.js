@@ -261,6 +261,9 @@ export function computeFeatures(lm, wl) {
 
   // ── 2차 운동(기구·홈트)용 ──
   f.hipMax = hip.max; // 한 다리만 뒤로 차는 동작(동키킥)은 펴진 쪽
+  f.kneeMax = knee.max; // 더 펴진 무릎: 네발 자세(동키킥)는 둘 다 굽힘, 마운틴 클라이머는 한쪽이 늘 펴짐
+  // 스무딩 안 한 '덜 펴진 엉덩이': 하이니처럼 0.3초마다 다리를 바꾸면 바꾸는 순간(1프레임)이 중앙값 스무딩에 지워진다
+  f.hipMinFast = hip.min;
   // 좌우 무릎 굽힘 차이: 사이드 런지·바이시클 크런치는 한쪽만 굽힌다(스쿼트는 양쪽이 같이)
   f.kneeAsym = Number.isFinite(knee.L) && Number.isFinite(knee.R) ? Math.abs(knee.L - knee.R) : NaN;
   // 발 간격을 '몸 기준'으로: 골반 좌우 방향(stanceW, 사이드 런지·와이드 스쿼트)과 앞뒤 방향(stanceD, 런지·스플릿 스쿼트)
@@ -314,5 +317,5 @@ export const SMOOTH_KEYS = [
   'knee', 'kneeMin', 'kneeL', 'kneeR', 'hip', 'hipMin', 'elbow', 'elbowMin', 'elbowL', 'elbowR', 'arm', 'armMax', 'torsoTilt', 'hipH', 'hipHAbs', 'handH',
   'wristH', 'wristHMax', 'shoulderOverWrist', 'kneeYDiff', 'ankleDX', 'ankleDZ', 'wristDX',
   'kneeDX', 'frontal', 'bodyLine', 'hipSag', 'shY', 'heelLift', 'noseDrop', 'torsoFrac',
-  'hipMax', 'kneeAsym', 'stanceW', 'stanceD', 'ankleYDiff', 'wristDist', 'reach', 'handSide', 'shRoll', 'chestUp',
+  'hipMax', 'kneeMax', 'kneeAsym', 'stanceW', 'stanceD', 'ankleYDiff', 'wristDist', 'reach', 'handSide', 'shRoll', 'chestUp',
 ];

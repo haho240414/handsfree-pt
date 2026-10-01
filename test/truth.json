@@ -499,5 +499,117 @@
   "conf": "robust",
   "view": "55초·빠름",
   "split": "holdout"
+ },
+ "legpress_physio": {
+  "exercise": "legpress",
+  "reps": 4,
+  "conf": "high",
+  "view": "뒤쪽 비스듬히·기구 오르내리기 포함",
+  "split": "holdout"
+ },
+ "legpress_iconic": {
+  "exercise": "legpress",
+  "reps": null,
+  "conf": "robust",
+  "view": "자막·장면 전환 편집 영상",
+  "split": "holdout"
+ },
+ "legext_hammer": {
+  "exercise": "legext",
+  "reps": 3,
+  "conf": "high",
+  "view": "측면·중간에 손잡이 근접 장면",
+  "split": "holdout"
+ },
+ "legext_livelean": {
+  "exercise": "legext",
+  "reps": null,
+  "conf": "robust",
+  "view": "여러 각도로 전환되는 편집 영상",
+  "split": "holdout"
+ },
+ "legcurl_yaralla": {
+  "exercise": "legcurl",
+  "reps": 7,
+  "conf": "mid",
+  "view": "측면·마지막 8번째는 내리기 전에 끝남",
+  "split": "holdout"
+ },
+ "legcurl_wolfson": {
+  "exercise": "legcurl",
+  "reps": null,
+  "conf": "robust",
+  "view": "설명 위주·느린 시범 1회",
+  "split": "holdout"
+ },
+ "donkey_puregym": {
+  "exercise": "donkey",
+  "reps": 3,
+  "conf": "mid",
+  "view": "측면·처음과 끝은 반쪽 동작",
+  "split": "holdout"
+ },
+ "donkey_livestrong": {
+  "exercise": "donkey",
+  "reps": null,
+  "conf": "robust",
+  "view": "편집 영상(미리보기·각도 전환·페이드)",
+  "split": "holdout"
+ },
+ "uprightrow_puregym": {
+  "exercise": "uprightrow",
+  "reps": 5,
+  "conf": "mid",
+  "view": "정면·6번째는 올린 채 끝남",
+  "split": "holdout"
+ },
+ "uprightrow_livelean": {
+  "exercise": "uprightrow",
+  "reps": null,
+  "conf": "robust",
+  "view": "정면↔측면 편집 영상",
+  "split": "holdout"
+ },
+ "hanglegraise_cleanhealth": {
+  "exercise": "hanglegraise",
+  "reps": 5,
+  "conf": "high",
+  "view": "정면·끝에 다리 벌리기(반복 아님)",
+  "split": "holdout"
+ },
+ "hanglegraise_runna": {
+  "exercise": "hanglegraise",
+  "reps": null,
+  "conf": "robust",
+  "view": "2인·설명 장면 전환",
+  "split": "holdout"
+ },
+ "highknees_puregym": {
+  "exercise": "highknees",
+  "reps": 20,
+  "conf": "mid",
+  "view": "측면·빠름(한쪽 1회, 0.33초 간격)",
+  "split": "holdout"
+ },
+ "highknees_cult": {
+  "exercise": "highknees",
+  "reps": null,
+  "conf": "robust",
+  "view": "편집 영상(제목·근접·그래픽)",
+  "split": "holdout"
+ },
+ "bulgarian_nasm": {
+  "exercise": "bulgarian",
+  "reps": null,
+  "conf": "robust",
+  "view": "측면·중간에 다리만 보이는 근접 장면",
+  "split": "holdout"
+ },
+ "pushdown_bbcom": {
+  "exercise": "pushdown",
+  "reps": null,
+  "conf": "robust",
+  "view": "와이드↔근접 교차 편집",
+  "split": "holdout"
  }
 }

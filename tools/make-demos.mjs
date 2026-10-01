@@ -14,18 +14,20 @@ const PICK = {
   squat: ['squat_side_nicke'], lunge: ['lunge_alt_demo'], deadlift: ['deadlift_glossop_side'], calf: ['calf_balance'],
   legpress: ['legpress_puregym', [2.5, 10]], legext: ['legext_puregym'], legcurl: ['legcurl_puregym', [34, 60]],
   sidelunge: ['sidelunge_medstar'], bulgarian: ['bulgarian_denvyr', [21, 30]], wallsit: ['wallsit_fb', [17.5, 21.5]],
-  donkey: ['donkey_nuffield', [0, 6.6]], pushup: ['pushup_isolated_side'], press: ['press_livelean'], lateral: ['lateral_nasm'],
+  donkey: ['donkey_puregym', null, 'donkey_nuffield'], pushup: ['pushup_isolated_side'], press: ['press_livelean'], lateral: ['lateral_nasm'],
   frontraise: ['frontraise_puregym'], fly: ['cablefly_rp'], uprightrow: ['uprightrow_rp'], reversefly: ['reversefly_atomic', [10, 21.5]],
   pullup: ['pullup_crossfit'], latpulldown: ['latpulldown_puregym'], seatedrow: ['seatedrow_rp'], curl: ['curl_mccarthy'],
   triext: ['triext_opex'], dips: ['dips_floor_tasha'], pushdown: ['pushdown_rp'], situp: ['situp_clinical'],
   bridge: ['bridge_puregym', null, 'hipthrust_rusin'], legraise: ['legraise_livestrong'], hanglegraise: ['hanglegraise_puregym'],
   russian: ['russian_larsen', [4.3, 13.2]], bicycle: ['bicycle_medbridge', [10, 17]], sideplank: ['sideplank_nasm', [2, 12]],
   jumpingjack: ['jacks_xhit'], climber: ['climber_grouphiit'], burpee: ['burpee_crossfit'], kbswing: ['kbswing_strongfirst'],
-  highknees: ['highknees_xhit'],
+  highknees: ['highknees_puregym', null, 'highknees_xhit'],
 };
 // 영상이 없는 운동: 비슷한 자세를 빌려 정지 화면으로
 const STILL = { plank: ['pushup_isolated_side', 'top'] };
 const J = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]; // 코·어깨·팔꿈치·손목·엉덩이·무릎·발목
+// 좌우를 번갈아 하는 운동(한쪽 1회)은 양쪽 2회를 한 묶음으로 보여준다
+const ALTERNATE = new Set(['highknees', 'climber', 'russian', 'bicycle']);
 
 const un = (a) => a.map(([x, y, z, visibility]) => ({ x, y, z, visibility }));
 const load = (n) => JSON.parse(fs.readFileSync(path.join(ROOT, 'test/fixtures', `${n}.full.json`), 'utf8'));
@@ -46,8 +48,10 @@ function window(fx, ex, range) {
   const amps = reps.map((r) => r.amp).sort((a, b) => a - b);
   const med = amps[amps.length >> 1];
   const r = [...reps].sort((a, b) => Math.abs(a.amp - med) - Math.abs(b.amp - med))[0];
-  const next = reps.find((x) => x.tStart > r.tStart + 0.2);
-  return [r.tStart - 0.15, Math.min(next ? next.tStart + 0.1 : r.tEnd + 0.9, r.tEnd + 1.2)];
+  let last = r;
+  if (ALTERNATE.has(ex)) last = reps.find((x) => x.tStart > r.tEnd - 0.1 && x.tStart < r.tEnd + 0.6) || r;
+  const next = reps.find((x) => x.tStart > last.tStart + 0.2);
+  return [r.tStart - 0.15, Math.min(next ? next.tStart + 0.1 : last.tEnd + 0.9, last.tEnd + 1.2)];
 }
 
 function pack(fx, [t0, t1], still = false) {
