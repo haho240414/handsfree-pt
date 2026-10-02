@@ -5,15 +5,18 @@
   font-display:swap
 }
 :root {
-  --bg:#fdfcf9;
-  --surface:#fdfcf9;
-  --surface-2:#f2f2ee;
-  --line:#e1e2de;
-  --text:#16191c;
-  --text-2:#696f76;
-  --accent:#25543b;
+  --bg:#ffffff;
+  --surface:#ffffff;
+  --surface-2:#f3f5f8;
+  --line:#e9edf2;
+  --text:#171b22;
+  --text-2:#6b7481;
+  --accent:#146ae6;
   --accent-ink:#fff;
-  --accent-text:#25543b;
+  --accent-text:#146ae6;
+  --selected-bg:#edf5ff;
+  --accent-icon-filter:invert(36%) sepia(94%) saturate(2692%) hue-rotate(205deg) brightness(103%) contrast(105%);
+  --button-icon-filter:invert(1);
   --radius:8px;
   --shadow:none;
   --font:Pretendard,'Apple SD Gothic Neo',system-ui,sans-serif
@@ -25,9 +28,11 @@
   --line:#3d4248;
   --text:#fdfcf9;
   --text-2:#b3b8bf;
-  --accent:#bad5c4;
-  --accent-ink:#17251c;
-  --accent-text:#bad5c4
+  --accent:#a0c5ff;
+  --accent-ink:#132b4e;
+  --accent-text:#a0c5ff;
+  --selected-bg:#1d2d43;
+  --button-icon-filter:none
 }
 @media(prefers-color-scheme:dark) {
   :root:not([data-theme=light]) {
@@ -37,9 +42,11 @@
     --line:#3d4248;
     --text:#fdfcf9;
     --text-2:#b3b8bf;
-    --accent:#bad5c4;
-    --accent-ink:#17251c;
-    --accent-text:#bad5c4
+    --accent:#a0c5ff;
+    --accent-ink:#132b4e;
+    --accent-text:#a0c5ff;
+    --selected-bg:#1d2d43;
+    --button-icon-filter:none
   }
 }
 body {
@@ -150,7 +157,10 @@ button:focus-visible,summary:focus-visible,a:focus-visible {
   font-weight:750
 }
 .home-heading {
-  margin:42px 0 26px
+  margin:58px 0 22px
+}
+#screen-home.page {
+  padding-top:calc(32px + var(--safe-t))
 }
 .home-heading h1 {
   font-size:32px
@@ -162,27 +172,28 @@ button:focus-visible,summary:focus-visible,a:focus-visible {
 }
 .start-grid {
   display:grid;
-  gap:10px
+  gap:8px
 }
 .mode-row {
   display:flex;
   align-items:center;
-  gap:20px;
+  gap:32px;
   width:100%;
   min-height:84px;
-  padding:16px 20px;
+  padding:16px 8px;
   background:transparent;
-  border:1px solid var(--line);
-  border-radius:8px;
+  border:0;
+  border-bottom:1px solid var(--line);
+  border-radius:0;
   text-align:left
 }
-.mode-row>span {
+.mode-row>.mode-copy {
   flex:1;
   min-width:0
 }
 .mode-row>.ui-icon {
-  width:30px;
-  height:30px
+  width:28px;
+  height:28px
 }
 .mode-row b {
   font-size:20px;
@@ -195,27 +206,47 @@ button:focus-visible,summary:focus-visible,a:focus-visible {
   margin-top:4px
 }
 .mode-row[aria-pressed=true] {
-  border-color:var(--text);
-  background:var(--surface-2)
+  width:calc(100% + 16px);
+  margin-left:-8px;
+  padding:16px;
+  border-bottom-color:transparent;
+  border-radius:12px;
+  background:var(--selected-bg)
 }
-.mode-row .mode-check {
-  width:24px;
-  height:24px;
-  opacity:0
+.mode-state {
+  display:none;
+  flex:none;
+  width:28px;
+  height:28px;
+  align-items:center;
+  justify-content:center;
+  border-radius:50%;
+  background:#146ae6
 }
-.mode-row[aria-pressed=true] .mode-check {
-  opacity:1
+.mode-row[aria-pressed=true] .mode-state {
+  display:flex
+}
+.mode-row[aria-pressed=true] .mode-arrow {
+  display:none
+}
+.mode-row>.mode-arrow {
+  width:20px;
+  height:20px
 }
 .home-start {
   margin-top:24px;
-  background:var(--text);
-  color:var(--bg);
+  margin-left:-8px;
+  width:calc(100% + 16px);
+  min-height:60px;
+  border-radius:10px;
+  background:var(--accent);
+  color:var(--accent-ink);
   flex-direction:row;
   gap:16px;
   font-size:19px
 }
 .home-start .ui-icon {
-  filter:invert(1)
+  filter:var(--button-icon-filter)!important
 }
 .recent-heading {
   display:flex;
@@ -223,7 +254,32 @@ button:focus-visible,summary:focus-visible,a:focus-visible {
   align-items:center;
   border-top:1px solid var(--line);
   padding-top:18px;
-  margin-top:28px
+  margin-top:24px
+}
+.home-session-row {
+  display:flex;
+  align-items:center;
+  gap:16px;
+  width:100%;
+  min-height:76px;
+  padding:12px 0;
+  background:transparent;
+  border:0;
+  text-align:left
+}
+.home-session-row>span {
+  flex:1;
+  min-width:0
+}
+.home-session-row b {
+  font-size:18px;
+  font-weight:650
+}
+.home-session-row small {
+  display:block;
+  color:var(--text-2);
+  font-size:14px;
+  margin-top:4px
 }
 .recent-heading .text-btn {
   font-size:14px;
@@ -1180,6 +1236,14 @@ body.in-workout .tabbar {
   width:100%;
   min-height:48px;
   margin:8px 0 20px
+}
+.page .mode-row[aria-pressed=true]>.ui-icon,.tabbar button.active .ui-icon {
+  filter:var(--accent-icon-filter)
+}
+.page .mode-state .ui-icon {
+  width:18px;
+  height:18px;
+  filter:invert(1)!important
 }
 /* Keep all three modes and the start action visible on short phone screens. */
 @media (max-height:740px) and (orientation:portrait) {

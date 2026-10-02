@@ -6,7 +6,7 @@ import { icon } from './icons.js';
 import { editRecordedSet, postureFeedback, assessment } from './session-edit.js';
 import { Workout, GPU_GUARD } from './workout.js';
 import { renderHistory } from './history.js';
-import { esc, exName, DAYS, fmtDate, fmtTime, minutes, setValue, sessionTotals, sessionLine, sessionItem } from './format.js';
+import { esc, exName, DAYS, fmtDate, fmtTime, minutes, setValue, sessionTotals, sessionLine } from './format.js';
 import { isNative, NativeApp, NativeTTS, NativeHealth, canShareFile, shareTextFile, shareBinaryFile } from './native.js';
 import { toHealthRecord, healthEligible } from './health.js';
 import { corrections } from './diag.js';
@@ -65,8 +65,11 @@ function renderHome() {
   $('routine-sub').textContent = draft?.items?.length
     ? `${draft.items.filter((it) => !isTimer(it)).length}가지 운동 · 약 ${routineMinutes(draft.items)}분`
     : '목표에 맞춰 순서대로 운동하기';
-  const recent = store.sessions().slice(0, 2);
-  $('recent-list').innerHTML = recent.length ? recent.map(sessionItem).join('')
+  const recent = store.sessions().slice(0, 1);
+  $('recent-list').innerHTML = recent.length ? recent.map((sess) => {
+    const tot = sessionTotals(sess);
+    return `<button class="home-session-row" data-session="${esc(sess.id)}"><span><b>${esc(sessionLine(sess)) || '기록 없음'}</b><small>${tot.min}분 · ${tot.reps}회</small></span>${icon('caret-right')}</button>`;
+  }).join('')
     : '<div class="empty">아직 운동 기록이 없어요.</div>';
 }
 
