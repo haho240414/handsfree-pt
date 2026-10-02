@@ -746,10 +746,10 @@ function renderSettings() {
     </div>
     <h2 class="section-title">카메라</h2>
     <div class="card">
-      ${row('사용할 카메라', `지금: ${esc(camName)}. 전면 광각이 따로 있는 폰은 목록에 '광각'으로 나와요`,
+      ${row('사용할 카메라', `지금: ${esc(camName)}. 자동 모드에서 넓게 보기를 켜면, 앱에서 확인할 수 있는 전면 광각을 우선 사용해요`,
         `<div class="cam-ctl"><button class="mini-btn" id="btn-cam-scan" type="button">${camList ? '다시 찾기' : '카메라 찾기'}</button>
         ${camList ? `<div class="chips">${camOpts}</div>` : ''}</div>`, true)}
-      ${row('넓게 보기(광각)', '센서 전체(4:3)로 찍어 좌우가 더 보이고, 줌을 1배 아래로 줄일 수 있는 폰은 가장 넓게 찍어요', sw('cameraWide'))}
+      ${row('넓게 보기', '4:3 화면과 가장 작은 줌을 요청해요. 갤럭시 기본 카메라의 광각 전환이 이 앱에서도 지원되는지는 기종에 따라 달라요. 운동 화면에 실제 카메라·화면 비율·줌을 표시해요', sw('cameraWide'))}
       ${row('화면 좌우 반전', '거울처럼 보이기 (전면 카메라일 때만)', sw('mirror'))}
     </div>
     <h2 class="section-title">인식</h2>

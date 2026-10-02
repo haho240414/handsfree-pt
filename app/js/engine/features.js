@@ -256,8 +256,10 @@ export function computeFeatures(lm, wl) {
     f.torsoFrac = Math.hypot(sx - hx, sy - hy);
   } else f.torsoFrac = NaN;
   // 부위별로 화면에 보이는지 (안내 문구용)
-  const seen = (...idx) => Math.max(...idx.map((i) => vis(lm[i])));
-  f.seen = { head: seen(0) >= VIS_MIN, hands: seen(15, 16) >= VIS_MIN, knees: seen(25, 26) >= VIS_MIN, feet: seen(27, 28) >= VIS_MIN };
+  // 모델이 화면 밖 관절을 높은 신뢰도로 추정해도 실제 화면에 보이는 부위라고 안내하지 않는다.
+  const seen = (...idx) => idx.some((i) => vis(lm[i]) >= VIS_MIN
+    && lm[i].x >= 0 && lm[i].x <= 1 && lm[i].y >= 0 && lm[i].y <= 1);
+  f.seen = { head: seen(0), hands: seen(15, 16), knees: seen(25, 26), feet: seen(27, 28) };
 
   // ── 2차 운동(기구·홈트)용 ──
   f.hipMax = hip.max; // 한 다리만 뒤로 차는 동작(동키킥)은 펴진 쪽

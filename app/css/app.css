@@ -220,6 +220,13 @@ input[type="number"], input[type="text"], select, textarea {
 }
 .wo-status { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; flex: 1; min-width: 0; }
 .wo-status span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wo-camera { position: absolute; top: calc(54px + var(--safe-t)); left: 14px; z-index: 2; font-size: 12px; color: #ddd; text-shadow: 0 1px 4px #000; }
+.wo-framing {
+  position: absolute; top: calc(80px + var(--safe-t)); left: 14px; right: 14px; z-index: 2;
+  padding: 9px 12px; border-radius: 12px; background: rgba(0, 0, 0, .8); color: #ffcf75;
+  border: 1px solid rgba(255, 176, 32, .55); font-size: 14px; line-height: 1.45;
+}
+.workout:has(.wo-plan:not([hidden])) .wo-framing { top: calc(146px + var(--safe-t)); }
 .dot { width: 10px; height: 10px; border-radius: 50%; background: #888; flex: none; }
 .dot.ok { background: var(--wo-accent); box-shadow: 0 0 10px var(--wo-accent); }
 .dot.warn { background: #ffb020; }
@@ -295,6 +302,8 @@ input[type="number"], input[type="text"], select, textarea {
 }
 /* 가로로 세운 폰: 영상(4:3)은 가운데, 안내·템포·다음 운동은 오른쪽 기둥으로 — 큰 숫자가 가려지지 않게 */
 @media (orientation: landscape) {
+  .wo-framing { left: auto; width: min(36vw, 350px); }
+  .workout:has(.wo-plan:not([hidden])) .wo-framing { top: calc(80px + var(--safe-t)); }
   .wo-bottom {
     left: auto; right: 0; top: calc(66px + var(--safe-t)); bottom: 0; width: min(40vw, 380px);
     display: flex; flex-direction: column; justify-content: flex-end;
@@ -439,7 +448,7 @@ dialog h3 { margin: 0 0 10px; }
 
 /* 운동 화면 · PT 진행 */
 .wo-plan {
-  position: absolute; left: 14px; right: 14px; top: calc(62px + var(--safe-t)); z-index: 2;
+  position: absolute; left: 14px; right: 14px; top: calc(80px + var(--safe-t)); z-index: 2;
   padding: 8px 12px; border-radius: 12px; background: rgba(0, 0, 0, .45); backdrop-filter: blur(6px);
 }
 .wo-plan-top { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; font-weight: 700; }

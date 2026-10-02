@@ -8,7 +8,8 @@ import { createPoseLandmarker, BONES, JOINTS } from './pose.js';
 import { Voice, nativeKorean } from './voice.js';
 import { TiltSensor } from './tilt.js';
 import { DiagRecorder, corrections } from './diag.js';
-import { openCamera, widenCamera } from './camera.js';
+import { openCamera, widenCamera, cameraSummary } from './camera.js';
+import { framingIssue, FramingGuide } from './framing.js';
 import { PlanRunner, isHold, isTimer, isTimed, TIMER_STEPS, PLAN_META, weightStep } from './routine.js';
 import { loadDemos, playDemo, hasDemo } from './demo.js';
 import * as store from './store.js';
@@ -49,7 +50,7 @@ export class Workout {
       sets: $('wo-sets'), debug: $('wo-debug'), loading: $('wo-loading'), loadingText: $('wo-loading-text'),
       voiceBtn: $('btn-voice'), endBtn: $('btn-end'),
       tempo: $('wo-tempo'), tempoText: $('wo-tempo-text'), tempoCanvas: $('wo-tempo-canvas'), bottom: $('wo-bottom'),
-      restActions: $('wo-rest-actions'), frame: $('wo-frame'),
+      restActions: $('wo-rest-actions'), frame: $('wo-frame'), framing: $('wo-framing'), camera: $('wo-camera'),
       adjust: $('wo-adjust'), adjW: $('adj-w'), adjWVal: $('adj-w-val'), adjR: $('adj-r'), adjRVal: $('adj-r-val'),
       plan: $('wo-plan'), planStep: $('wo-plan-step'), planSets: $('wo-plan-sets'), planFill: $('wo-plan-fill'),
       target: $('wo-target'), next: $('wo-next'), nextText: $('wo-next-text'), planDoneBtn: $('btn-plan-done'), demo: $('wo-demo'),
@@ -135,6 +136,12 @@ export class Workout {
     this.lastTs = 0;
     this.lastInferAt = 0;
     this.lastLm = null;
+    this.camInfo = null;
+    this.frameGuide = new FramingGuide();
+    this.el.framing.hidden = true;
+    this.el.camera.hidden = true;
+    this.lastVT = null;
+    this.totalFrames = 0;
     this.inferEvery = 1000 / Math.max(5, Number(st.analysisFps) || 15);
     this.frames = 0;
     this.fps = 0;
@@ -153,7 +160,7 @@ export class Workout {
     if (!source) {
       this.diag.start({
         app: 'handsfree-pt', ua: navigator.userAgent, mode: this.session.mode, candidates: candidates || null,
-        settings: { model: st.model, gpu: st.gpu, mirror: st.mirror, lockReps: st.lockReps },
+        settings: { model: st.model, gpu: st.gpu, mirror: st.mirror, lockReps: st.lockReps, cameraWide: st.cameraWide },
         screen: { w: screen.width, h: screen.height, dpr: window.devicePixelRatio },
       });
     }
@@ -495,6 +502,8 @@ export class Workout {
       this.el.loadingText.textContent = '카메라 켜는 중…';
       this.stream = await openCamera(st);
       this.camInfo = await widenCamera(this.stream, st.cameraWide);
+      this.el.camera.textContent = cameraSummary(this.camInfo);
+      this.el.camera.hidden = false;
       // 거울 보기는 나를 비추는(전면) 카메라일 때만
       this.el.screen.classList.toggle('mirror', !!st.mirror && this.camInfo.facing !== 'environment');
       v.removeAttribute('src');
@@ -738,6 +747,9 @@ export class Workout {
     const now = performance.now();
     const active = snap.state === 'reps' || snap.state === 'hold';
     const frame = this.isFile ? null : this._framing(snap);
+    const shown = this.frameGuide.update(frame, now);
+    this.el.framing.hidden = !shown || this.isFile;
+    if (shown) this.el.framing.textContent = shown.text;
     let dot = 'warn', status, message = '';
     if (this.isFile) {
       status = `영상 분석 중 ${Math.round((this.progress || 0) * 100)}%`;
@@ -748,7 +760,7 @@ export class Workout {
       message = frame?.text || '전신이 보이게 2~3m 뒤로 가 주세요';
     } else {
       status = `인식 중 · ${this.fps}fps`;
-      dot = 'ok';
+      dot = shown && shown.code !== 'feet' ? 'warn' : 'ok';
       message = frame?.text || '';
     }
     this.el.dot.className = `dot ${dot}`;
@@ -1000,15 +1012,7 @@ export class Workout {
 
   // 화면 구도: 안 보이는 부위에 따라 어떻게 하면 되는지. speak = 소리로도 알려줄 만큼 중요한지
   _framing(snap) {
-    const raw = snap.raw;
-    if (!raw) return null;
-    const s = raw.seen || {};
-    if (raw.torsoFrac > 0.42) return { code: 'close', text: '너무 가까워요. 두세 걸음 뒤로 가 주세요', speak: true };
-    if (!s.knees) return { code: 'knees', text: '무릎까지 보이게 뒤로 가거나 폰을 낮춰 주세요', speak: true };
-    if (!s.head) return { code: 'head', text: '머리까지 보이게 폰을 세우거나 뒤로 가 주세요', speak: true };
-    if (raw.cutoff) return { code: 'edge', text: '몸 일부가 화면 밖이에요. 화면 가운데로 와 주세요', speak: false };
-    if (!s.feet) return { code: 'feet', text: '발까지 보이면 하체 운동을 더 잘 세요', speak: false };
-    return null;
+    return framingIssue(snap);
   }
 
   // 구도 안내 음성: 첫 세트를 기록하기 전(자리 잡는 중)에만, 3초 넘게 계속될 때, 같은 말은 두 번까지, 12초 간격

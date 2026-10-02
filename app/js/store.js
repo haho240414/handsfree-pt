@@ -19,7 +19,7 @@ export const DEFAULT_SETTINGS = {
   mirror: true,         // 화면 좌우 반전(거울처럼, 전면 카메라일 때만)
   cameraId: '',         // 고른 카메라(deviceId), '' = 전면 기본
   cameraLabel: '',
-  cameraWide: true,     // 넓게 보기: 센서 전체(4:3)로 찍고, 줌을 줄일 수 있으면 가장 넓게(광각)
+  cameraWide: true,     // 넓게 보기: 4:3·크롭 없음·최소 줌 요청. 자동 선택은 확인된 전면 광각 우선
   debug: false,         // 인식 과정 보기
   theme: 'auto',        // auto | light | dark
 };
