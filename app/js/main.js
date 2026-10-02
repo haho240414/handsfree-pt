@@ -1,6 +1,6 @@
 // 화면 전환·홈·운동 고르기·요약·기록·설정
 
-import { EXERCISES, EXERCISE_BY_ID, GROUPS, formInfo } from './engine/exercises.js';
+import { EXERCISES, EXERCISE_BY_ID, GROUPS, formInfo, exerciseFamily, uniqueExerciseFamilies } from './engine/exercises.js';
 import * as store from './store.js';
 import { icon } from './icons.js';
 import { editRecordedSet, postureFeedback, assessment } from './session-edit.js';
@@ -82,7 +82,7 @@ document.addEventListener('click', (e) => {
 let picked = new Set();
 let pickFilter = 'all';
 function renderPick() {
-  picked = new Set(store.lastPick().filter((id) => EXERCISE_BY_ID[id]));
+  picked = new Set(uniqueExerciseFamilies(store.lastPick()));
   pickFilter = 'all';
   $('pick-search').value = '';
   $('pick-groups').innerHTML = '<div id="pick-selected"></div><div class="card" id="pick-weights"></div><div id="pick-catalog"></div>';
@@ -93,7 +93,7 @@ function renderPickCatalog() {
   const query = $('pick-search').value.trim().replace(/\s/g,'').toLowerCase();
   const recent = new Set([...store.lastPick(), ...store.sessions().slice(0,5).flatMap(s=>s.sets.map(x=>x.exercise))]);
   const favorites = store.favoriteExercises();
-  const matches = EXERCISES.filter(e => (pickFilter==='all' || (pickFilter==='recent'?recent.has(e.id):favorites.includes(e.id))) && (!query || (e.name+e.id).replace(/\s/g,'').toLowerCase().includes(query)));
+  const matches = EXERCISES.filter(e => (pickFilter==='all' || (pickFilter==='recent'?recent.has(e.id):favorites.includes(e.id))) && (!query || (e.name+e.id+(e.aliases||[]).join('')).replace(/\s/g,'').toLowerCase().includes(query)));
   $('pick-catalog').innerHTML = matches.length ? GROUPS.map(g=>{
     const items=matches.filter(e=>e.group===g);if(!items.length)return '';
     return `<div class="pick-group">${g}</div><div class="pick-grid">${items.map(e=>`<button class="pick-item" data-pick="${e.id}" aria-pressed="${picked.has(e.id)}"><div class="n">${esc(e.name)}${e.verified?'':' <span class="beta">베타</span>'}${e.auto===false?' <span class="beta">골라서만</span>':''}</div><div class="h">${esc(e.tip)}</div></button>`).join('')}</div>`;
@@ -107,7 +107,7 @@ function updatePickUI() {
   btn.disabled = picked.size === 0;
   btn.textContent = picked.size === 0 ? '운동을 골라 주세요'
     : picked.size === 1 ? `${exName([...picked][0])} 시작` : `${picked.size}가지 운동으로 시작`;
-  $('pick-selected').innerHTML = picked.size ? '<p class="small muted">선택한 운동</p>'+[...picked].map(id=>`<div class="picked-row"><b>${esc(exName(id))}</b><button class="text-btn" data-favorite="${id}" aria-pressed="${store.favoriteExercises().includes(id)}">${store.favoriteExercises().includes(id)?'즐겨찾기 해제':'즐겨찾기 추가'}</button><button class="icon-btn" data-pick="${id}" aria-label="${esc(exName(id))} 선택 해제">${icon('minus')}</button></div>`).join('') : '';
+  $('pick-selected').innerHTML = picked.size ? '<p class="small muted">선택한 운동</p>'+[...picked].map(id=>`<div class="picked-row"><b>${esc(exName(id))}</b><button class="text-btn" data-favorite="${id}" aria-pressed="${store.favoriteExercises().includes(id)}">${store.favoriteExercises().includes(id)?'즐겨찾기 해제':'즐겨찾기 추가'}</button><button class="icon-btn" data-pick="${id}" aria-label="${esc(exName(id))} 선택 해제">${icon('minus')}</button></div>`).join('') + ([...picked].some(id=>EXERCISE_BY_ID[id].family) ? '<p class="small muted">같은 동작의 변형은 하나씩 골라요. 일반 컬과 해머 컬처럼 그립만 다른 운동은 카메라로 구별하기 어려워요.</p>' : '') : '';
   const weights = [...picked].filter((id) => EXERCISE_BY_ID[id].kind === 'reps');
   const box = $('pick-weights');
   box.hidden = weights.length === 0;
@@ -121,7 +121,10 @@ $('pick-groups').addEventListener('click', (e) => {
   const b = e.target.closest('[data-pick]');
   if (!b) return;
   const id = b.dataset.pick;
-  if (picked.has(id)) picked.delete(id); else picked.add(id);
+  if (picked.has(id)) picked.delete(id); else {
+    for (const prior of picked) if (exerciseFamily(prior) === exerciseFamily(id)) picked.delete(prior);
+    picked.add(id);
+  }
   renderPickCatalog();
   updatePickUI();
 });

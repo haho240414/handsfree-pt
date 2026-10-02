@@ -22,9 +22,14 @@ export const KEY_JOINTS = [
 export const VIS_MIN = 0.5;
 const DEG = 180 / Math.PI;
 
-const vis = (p) => (p ? (p.visibility ?? 1) : 0);
+const vis = (p) => p ? Math.min(p.visibility ?? 1, p.presence ?? 1) : 0;
+// 덤벨 운동의 팔 신호: 높은 visibility라도 화면 밖 팔꿈치·손목은 추정값이다.
+export const observedVis = (p) => p && Number.isFinite(p.x) && Number.isFinite(p.y)
+  && p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1
+  ? vis(p) : 0;
 
 function angle3(a, b, c) {
+  if (![a, b, c].every((p) => p && [p.x, p.y, p.z].every(Number.isFinite))) return NaN;
   const ux = a.x - b.x, uy = a.y - b.y, uz = a.z - b.z;
   const vx = c.x - b.x, vy = c.y - b.y, vz = c.z - b.z;
   const nu = Math.hypot(ux, uy, uz), nv = Math.hypot(vx, vy, vz);
@@ -45,7 +50,8 @@ function sided(a, wa, b, wb) {
   return { L: NaN, R: NaN, avg: NaN, min: NaN, max: NaN };
 }
 
-const minVis = (lm, ...idx) => Math.min(...idx.map((i) => vis(lm[i])));
+const minVis = (lm, ...idx) => Math.min(...idx.map((i) =>
+  i >= LM.L_ELBOW && i <= LM.R_WRIST ? observedVis(lm[i]) : vis(lm[i])));
 
 const norm = (v) => {
   const n = Math.hypot(v[0], v[1], v[2]);
@@ -161,7 +167,7 @@ export function computeFeatures(lm, wl) {
   const arm = sided(
     angle3(wl[L.L_HIP], wl[L.L_SHOULDER], wl[L.L_ELBOW]), minVis(lm, L.L_HIP, L.L_SHOULDER, L.L_ELBOW),
     angle3(wl[L.R_HIP], wl[L.R_SHOULDER], wl[L.R_ELBOW]), minVis(lm, L.R_HIP, L.R_SHOULDER, L.R_ELBOW));
-  f.arm = arm.avg; f.armMax = arm.max;
+  f.arm = arm.avg; f.armMax = arm.max; f.armMin = arm.min; f.armL = arm.L; f.armR = arm.R;
 
   // 몸통 기울기: 엉덩이 중심→어깨 중심 벡터와 '위쪽'의 각도. 0 = 똑바로 섬, 90 = 수평, >90 = 엉덩이가 어깨보다 높음
   const sL = wl[L.L_SHOULDER], sR = wl[L.R_SHOULDER], hL = wl[L.L_HIP], hR = wl[L.R_HIP];
@@ -190,12 +196,15 @@ export function computeFeatures(lm, wl) {
   const wristH = sided(
     wl[L.L_SHOULDER].y - wl[L.L_WRIST].y, minVis(lm, L.L_SHOULDER, L.L_WRIST),
     wl[L.R_SHOULDER].y - wl[L.R_WRIST].y, minVis(lm, L.R_SHOULDER, L.R_WRIST));
-  f.wristH = wristH.avg; f.wristHMax = wristH.max;
+  f.wristH = wristH.avg; f.wristHMax = wristH.max; f.wristHL = wristH.L; f.wristHR = wristH.R;
   f.wristHMin = wristH.L != null && Number.isFinite(wristH.L) && Number.isFinite(wristH.R) ? wristH.min : NaN; // 두 손이 다 보일 때 낮은 쪽(손 제스처용)
   f.shoulderOverWrist = -wristH.avg; // 푸시업: 팔 편 상태 ≈ 0.5, 내려가면 ≈ 0.15
 
   // 코가 어깨보다 얼마나 아래인지(m): 엎드린 푸시업은 ≥ 0 근처, 서거나 앉아 있으면 -0.15 안팎
   const shMidY = (sL.y + sR.y) / 2;
+  f.shoulderH = torsoVis >= VIS_MIN ? (hL.y + hR.y) / 2 - shMidY : NaN;
+  f.elbowKneeL = minVis(lm, 13, 25) >= VIS_MIN ? Math.hypot(wl[13].x - wl[25].x, wl[13].y - wl[25].y, wl[13].z - wl[25].z) : NaN;
+  f.elbowKneeR = minVis(lm, 14, 26) >= VIS_MIN ? Math.hypot(wl[14].x - wl[26].x, wl[14].y - wl[26].y, wl[14].z - wl[26].z) : NaN;
   f.noseDrop = vis(lm[L.NOSE]) >= VIS_MIN && torsoVis >= VIS_MIN ? wl[L.NOSE].y - shMidY : NaN;
 
   // 무릎 높이 차(m): 스쿼트는 두 무릎 높이가 같고, 런지는 뒷무릎이 바닥 가까이 내려간다
@@ -226,7 +235,7 @@ export function computeFeatures(lm, wl) {
     f.hipSag = NaN;
   }
 
-  const wristVisBoth = Math.min(vis(lm[L.L_WRIST]), vis(lm[L.R_WRIST]));
+  const wristVisBoth = Math.min(observedVis(lm[L.L_WRIST]), observedVis(lm[L.R_WRIST]));
   f.wristDX = wristVisBoth >= 0.3 ? Math.abs(wl[L.L_WRIST].x - wl[L.R_WRIST].x) : NaN;
 
   // 화면(2D) 정보: 사람이 화면 안에 다 들어왔는지 안내용
@@ -260,6 +269,10 @@ export function computeFeatures(lm, wl) {
   const seen = (...idx) => idx.some((i) => vis(lm[i]) >= VIS_MIN
     && lm[i].x >= 0 && lm[i].x <= 1 && lm[i].y >= 0 && lm[i].y <= 1);
   f.seen = { head: seen(0), hands: seen(15, 16), knees: seen(25, 26), feet: seen(27, 28) };
+  f.seen.arms = [ [11, 13, 15], [12, 14, 16] ].some((ids) => ids.every((i) => observedVis(lm[i]) >= VIS_MIN));
+  f.seen.bothArms = [ [11, 13, 15], [12, 14, 16] ].every((ids) => ids.every((i) => observedVis(lm[i]) >= VIS_MIN));
+  f.upperCutoff = [0, 11, 12, 13, 14, 15, 16, 23, 24].some((i) => vis(lm[i]) >= VIS_MIN
+    && (lm[i].x < edge || lm[i].x > 1-edge || lm[i].y < edge || lm[i].y > 1-edge));
 
   // ── 2차 운동(기구·홈트)용 ──
   f.hipMax = hip.max; // 한 다리만 뒤로 차는 동작(동키킥)은 펴진 쪽
@@ -320,4 +333,12 @@ export const SMOOTH_KEYS = [
   'wristH', 'wristHMax', 'shoulderOverWrist', 'kneeYDiff', 'ankleDX', 'ankleDZ', 'wristDX',
   'kneeDX', 'frontal', 'bodyLine', 'hipSag', 'shY', 'heelLift', 'noseDrop', 'torsoFrac',
   'hipMax', 'kneeMax', 'kneeAsym', 'stanceW', 'stanceD', 'ankleYDiff', 'wristDist', 'reach', 'handSide', 'shRoll', 'chestUp',
+  'armMin', 'armL', 'armR', 'wristHL', 'wristHR', 'shoulderH', 'elbowKneeL', 'elbowKneeR',
 ];
+
+/** 한쪽 팔의 신호·판정이 반대편 쉬는 팔과 섞이지 않게 한다. 몸통·두 손 간격은 그대로. */
+export function armFeatures(f, side) {
+  const elbow = f[`elbow${side}`], arm = f[`arm${side}`], wristH = f[`wristH${side}`];
+  return { ...f, elbow, elbowMin: elbow, arm, armMin: arm, armMax: arm,
+    wristH, wristHMax: wristH, shoulderOverWrist: -wristH, elbowKnee: f[`elbowKnee${side}`] };
+}

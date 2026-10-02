@@ -49,6 +49,14 @@ export const PLAN_META = {
   jumpingjack: { eq: 'body', type: 'cardio', reps: [20, 30, 40], slot: ['cardio'] },
   highknees: { eq: 'body', type: 'cardio', reps: [20, 30, 40], slot: ['cardio'], note: '좌우 합쳐서' },
   burpee: { eq: 'body', type: 'cardio', reps: [5, 8, 10], slot: ['cardio'] },
+  kickback: { eq: 'dumbbell', type: 'iso', reps: [10, 12, 15], slot: ['triceps'], note: '양팔 함께 1회, 한쪽씩은 움직이는 팔마다 1회' },
+  concentrationcurl: { eq: 'dumbbell', type: 'iso', reps: [8, 10, 12], slot: ['biceps'], note: '한쪽씩, 왼쪽·오른쪽을 각각 한 세트로' },
+  hammercurl: { eq: 'dumbbell', type: 'iso', reps: [10, 12, 12], slot: ['biceps'], note: '양팔 함께 1회, 번갈아는 한쪽마다 1회' },
+  pullover: { eq: 'dumbbell', type: 'iso', reps: [8, 10, 12], slot: ['push2'], note: '벤치 필요' },
+  shrug: { eq: 'dumbbell', type: 'iso', reps: [10, 12, 15], slot: ['pull2'] },
+  gobletsquat: { eq: 'dumbbell', type: 'compound', reps: [8, 10, 12], slot: ['lower'] },
+  dumbbellrdl: { eq: 'dumbbell', type: 'compound', reps: [8, 10, 12], slot: ['hinge'] },
+  dumbbellbench: { eq: 'dumbbell', type: 'compound', reps: [8, 10, 12], slot: ['push'], note: '벤치 필요' },
 };
 
 const EQ_RANK = { body: 0, dumbbell: 1, gym: 2 };

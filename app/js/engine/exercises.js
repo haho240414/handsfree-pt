@@ -414,7 +414,7 @@ export const EXERCISES = [
     ],
   },
   {
-    id: 'row', name: '바벨·덤벨 로우', group: '등', unit: '회', kind: 'reps', priority: 6, verified: false,
+    id: 'row', name: '바벨·덤벨 로우', group: '등', unit: '회', kind: 'reps', priority: 6, verified: false, sided: true,
     tip: '옆에서 숙인 상체와 팔이 보이게',
     // 상체를 숙인 채 팔꿈치를 뒤로 당김
     signal: (f) => f.elbowMin, prom: 30, minDur: 0.5, maxDur: 8,
@@ -422,6 +422,7 @@ export const EXERCISES = [
     check: (w) => [
       ['상체를 숙임', between(M(w, 'torsoTilt'), 35, 85), 'core'],
       ['상체 고정(데드리프트 아님)', lt(R(w, 'torsoTilt'), 20), 'core'],
+      ['위팔을 뒤로 당김(킥백 아님)', gt(R(w, 'arm'), 25), 'core'],
       ['팔을 당김', lt(P(w, 'elbowMin', 10), 120)],
       ['서서 하는 동작', gt(P(w, 'hipH', 50), 0.4)],
       ['운동 거리에 서 있음', atDistance(w), 'soft'],
@@ -445,7 +446,7 @@ export const EXERCISES = [
 
   // ───────── 팔 ─────────
   {
-    id: 'curl', name: '덤벨 컬', group: '팔', unit: '회', kind: 'reps', priority: 5, verified: true,
+    id: 'curl', name: '덤벨 컬', group: '팔', unit: '회', kind: 'reps', priority: 5, verified: true, sided: true,
     tip: '정면이나 대각선에서 팔 전체가 보이게',
     // 정면에서 보면 AI가 팔꿈치 굽힘을 실제보다 덜 굽힌 것(≈90°)으로 읽는다 → 실측 기준으로 설정
     signal: (f) => f.elbowMin, prom: 35, minDur: 0.5, maxDur: 8,
@@ -703,7 +704,99 @@ export const EXERCISES = [
   },
 ];
 
+// 덤벨 추가 운동. 시범 데이터가 적으므로 베타로 제공한다.
+// 그립·벤치 종류처럼 포즈 33점으로 확인할 수 없는 차이는 직접 선택해서 이름을 정한다.
+EXERCISES.push(
+  {
+    id: 'kickback', name: '덤벨 트라이셉 킥백', group: '팔', unit: '회', kind: 'reps',
+    priority: 5, verified: false, sided: true,
+    tip: '옆에서 어깨·팔꿈치·손목까지 보이게. 한쪽씩 또는 양팔 함께',
+    signal: (f) => -f.elbow, prom: 35, minDur: 0.5, maxDur: 8,
+    tempo: { first: 'con', con: '뒤로 펴기', ecc: '굽히기' },
+    check: (w) => [
+      ['상체를 숙임', between(M(w, 'torsoTilt'), 30, 105), 'core'],
+      // PureGym 대각선 시범에서 위팔 각도 49~71°로 추정됨. 절대 45° 기준은 정상 동작을 막았다.
+      ['위팔을 몸통 옆에 고정', lt(P(w, 'arm', 90), 85), 'core'],
+      ['팔꿈치를 굽혔다 폄', and(lt(P(w, 'elbow', 10), 120), gt(P(w, 'elbow', 90), 140)), 'core'],
+      ['위팔은 고정(로우 아님)', lt(R(w, 'arm'), 25), 'core'],
+      ['상체는 고정', lt(R(w, 'torsoTilt'), 20), 'soft'],
+    ],
+    form: (w) => [
+      ['swing', R(w, 'arm') > 30, '팔꿈치 고정', '위팔을 몸통 옆에 두고 팔꿈치만 펴 주세요'],
+    ],
+  },
+  {
+    id: 'concentrationcurl', name: '컨센트레이션 컬', group: '팔', unit: '회', kind: 'reps',
+    priority: 5, verified: false, auto: false, sided: true,
+    tip: '앉아 한쪽 팔꿈치를 허벅지에 대고, 움직이는 팔을 카메라 쪽으로',
+    signal: (f) => f.elbow, prom: 35, minDur: 0.5, maxDur: 8,
+    tempo: { first: 'con', con: '들기', ecc: '내리기', dist: (f) => f.wristH },
+    check: (w) => [
+      ['앉아서 하는 동작', between(M(w, 'hip'), 35, 140), 'core'],
+      ['팔꿈치를 굽혔다 폄', and(lt(P(w, 'elbow', 10), 115), gt(R(w, 'elbow'), 40)), 'core'],
+      ['팔꿈치가 무릎 가까이', lt(M(w, 'elbowKnee'), 0.3), 'soft'],
+      ['팔꿈치를 고정', lt(R(w, 'arm'), 30), 'soft'],
+    ],
+    form: (w) => [
+      ['swing', R(w, 'arm') > 35, '팔꿈치 고정', '팔꿈치를 허벅지에 두고 몸의 반동을 줄여 주세요'],
+    ],
+  },
+  {
+    id: 'pullover', name: '덤벨 풀오버', group: '가슴·어깨', unit: '회', kind: 'reps',
+    priority: 5, verified: false,
+    tip: '벤치 옆에서 머리 뒤 손끝까지 보이게',
+    signal: (f) => -f.armMax, prom: 35, minDur: 0.6, maxDur: 10,
+    tempo: { first: 'ecc', ecc: '뒤로 내리기', con: '가슴 위로' },
+    check: (w) => [
+      ['누워서 하는 동작', between(M(w, 'torsoTilt'), 60, 120), 'core'],
+      ['가슴이 위를 향함', gt(M(w, 'chestUp'), 0.2), 'core'],
+      ['팔을 머리 뒤로 넘김', and(gt(P(w, 'armMax', 90), 135), lt(P(w, 'armMax', 10), 125)), 'core'],
+      ['팔꿈치는 살짝만 굽힘(프레스 아님)', gt(P(w, 'elbow', 10), 115)],
+      ['양손을 모은 채(플라이 아님)', lt(P(w, 'wristDist', 90), 0.6), 'soft'],
+      ['상체 고정', lt(R(w, 'torsoTilt'), 20), 'soft'],
+    ],
+  },
+  {
+    id: 'shrug', name: '덤벨 슈러그', group: '등', unit: '회', kind: 'reps',
+    priority: 3, verified: false, auto: false,
+    tip: '정면에서 어깨와 골반까지 크게 보이게. 어깨를 올렸다 내려요',
+    // StrengthLog 정면 시범: shoulderH 0.456~0.483m, 스무딩 뒤 진폭은 약 0.024m.
+    signal: (f) => -f.shoulderH, prom: 0.018, minDur: 0.5, maxDur: 8,
+    tempo: { first: 'con', con: '어깨 올리기', ecc: '내리기', dist: (f) => f.shoulderH },
+    check: (w) => [
+      ['상체를 세움', lt(M(w, 'torsoTilt'), 30), 'core'],
+      ['팔꿈치를 편 채', gt(P(w, 'elbow', 10), 145), 'core'],
+      ['위팔은 아래로 고정', lt(P(w, 'arm', 90), 35), 'core'],
+      ['어깨가 골반에 대해 올라감', gt(R(w, 'shoulderH'), 0.016), 'core'],
+      ['다리는 고정', lt(R(w, 'hip'), 15), 'soft'],
+    ],
+  },
+);
+
+const variant = (base, info) => ({ ...EXERCISES.find((e) => e.id === base),
+  auto: false, verified: false, family: base, ...info });
+EXERCISES.push(
+  variant('curl', { id: 'hammercurl', name: '해머 컬', aliases: ['덤벨 해머컬', 'hammer curl'],
+    tip: '손바닥을 마주 보게 잡고, 정면·대각선에서 팔 전체가 보이게' }),
+  variant('squat', { id: 'gobletsquat', name: '고블릿 스쿼트', aliases: ['덤벨 스쿼트', 'goblet squat'],
+    tip: '덤벨을 가슴 앞에 들고 정면·옆에서 무릎까지 보이게' }),
+  variant('deadlift', { id: 'dumbbellrdl', name: '덤벨 루마니안 데드리프트', aliases: ['덤벨 RDL', '루마니안', 'romanian deadlift'],
+    tip: '옆에서 머리·손목·무릎까지 보이게. 엉덩이를 뒤로 빼며 내려요', leadIn: false }),
+  variant('bench', { id: 'dumbbellbench', name: '덤벨 벤치 프레스', aliases: ['덤벨 체스트 프레스', 'dumbbell chest press'],
+    tip: '벤치 옆·대각선에서 양팔과 몸통이 보이게', leadIn: true }),
+);
+
 export const EXERCISE_BY_ID = Object.fromEntries(EXERCISES.map((e) => [e.id, e]));
+
+export const exerciseFamily = (id) => EXERCISE_BY_ID[id]?.family || id;
+/** 자유 운동에서 카메라로 구별할 수 없는 변형들을 동시에 후보로 두지 않는다. */
+export function uniqueExerciseFamilies(ids) {
+  const families = new Set();
+  return ids.filter((id) => {
+    if (!EXERCISE_BY_ID[id] || families.has(exerciseFamily(id))) return false;
+    families.add(exerciseFamily(id)); return true;
+  });
+}
 
 /** 자세 교정 코드 → 설명 (기록 화면용) */
 export function formInfo(exId, code) {

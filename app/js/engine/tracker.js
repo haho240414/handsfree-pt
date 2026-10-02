@@ -2,10 +2,10 @@
 // 모든 운동의 카운터를 동시에 돌리고, 조건을 통과한 반복이 같은 운동으로 연속 N회 나오면 그 운동으로 확정한다.
 // 브라우저/Node 공용 순수 로직 (앱과 test/eval.mjs 가 같은 코드를 쓴다).
 
-import { computeFeatures, SMOOTH_KEYS, uprightAxis, rotationTo, rotatePoints, REF_UP } from './features.js';
+import { computeFeatures, armFeatures, SMOOTH_KEYS, uprightAxis, rotationTo, rotatePoints, REF_UP } from './features.js';
 import { FeatureSmoother } from './filters.js';
-import { RepCounter, median } from './counter.js';
-import { EXERCISES, EXERCISE_BY_ID } from './exercises.js';
+import { RepCounter, ArmRepCounter, median } from './counter.js';
+import { EXERCISES, EXERCISE_BY_ID, uniqueExerciseFamilies } from './exercises.js';
 import { measureRep, toPhases, summarize } from './tempo.js';
 
 export const TRACKER_DEFAULTS = {
@@ -41,13 +41,14 @@ const DEG = 180 / Math.PI;
 export class Tracker {
   constructor(opts = {}) {
     this.o = { ...TRACKER_DEFAULTS, ...opts };
+    if (this.o.candidates?.length) this.o.candidates = uniqueExerciseFamilies(this.o.candidates);
     if (!this.o.fixed && this.o.candidates?.length === 1) this.o.fixed = this.o.candidates[0];
     const allow = this.o.fixed ? [this.o.fixed] : this.o.candidates;
     // auto: false 운동(벽 스쿼트처럼 쉬는 자세와 구별이 안 되는 것)은 직접 골랐을 때만 본다
     this.specs = EXERCISES.filter((e) => (allow?.length ? allow.includes(e.id) : e.auto !== false));
     this.repSpecs = this.specs.filter((e) => e.kind === 'reps').sort((a, b) => b.priority - a.priority);
     this.holdSpecs = this.specs.filter((e) => e.kind === 'hold');
-    this.counters = Object.fromEntries(this.repSpecs.map((e) => [e.id, new RepCounter(e)]));
+    this.counters = Object.fromEntries(this.repSpecs.map((e) => [e.id, e.sided ? new ArmRepCounter(e) : new RepCounter(e)]));
     this.smoother = new FeatureSmoother(SMOOTH_KEYS, this.o.smoothTau);
     this.buf = [];
     this.valid = {};
@@ -153,8 +154,10 @@ export class Tracker {
 
     if (f) {
       for (const ex of this.repSpecs) {
-        const rep = this.counters[ex.id].update(t, ex.signal(f));
-        if (rep) this._candidate(ex, rep, ev);
+        const reps = ex.sided
+          ? this.counters[ex.id].update(t, Object.fromEntries(['L', 'R'].map((side) => [side, ex.signal(armFeatures(f, side))])))
+          : [this.counters[ex.id].update(t, ex.signal(f))].filter(Boolean);
+        for (const rep of reps) this._candidate(ex, rep, ev);
       }
       if (this.holdSpecs.length) this._hold(t, f, ev);
       if (this.state === 'reps') this._tempo(ev, false);
@@ -174,27 +177,36 @@ export class Tracker {
   }
 
   _candidate(ex, rep, ev) {
-    const w = this._window(rep.tStart - 0.2, rep.tEnd);
-    const b = this._window(rep.tBottom - 0.25, rep.tBottom + 0.25);
+    const project = (frames) => rep.side ? frames.map((f) => armFeatures(f, rep.side)) : frames;
+    const w = project(this._window(rep.tStart - 0.2, rep.tEnd));
+    const b = project(this._window(rep.tBottom - 0.25, rep.tBottom + 0.25));
     const fixed = this.o.fixed === ex.id;
+    // 핵심 조건을 실제로 본 첫 유효 반복이 있으면 다음 반복의 일시적 가림을 허용한다.
+    // 첫 반복은 모든 core를 관찰해야 하고, 명백히 다른 자세(false)는 계속 거른다.
+    // 저프레임에서도 매달린 손이 잠깐 잘렸다는 이유로 스쿼트로 바뀌지 않게 한다.
+    const prior = this.valid[ex.id]?.at(-1);
+    const recent = this.state === 'search' && prior
+      && rep.tEnd - prior.tEnd <= Math.max(this.o.chainGap, 3 * (rep.tEnd - rep.tStart));
+    const confirmed = fixed || recent || (this.state === 'reps' && this.set.exercise === ex.id);
     // 결과: true 통과 / false 탈락 / null 모름(그 부위가 안 보임)
     const checks = ex.check(w, b, rep).map(([name, res, kind]) => ({
       name, res: res === true ? true : res === false ? false : null, kind: kind === true ? 'soft' : kind || null,
     }));
     const valid = checks.every((c) => {
-      if (c.kind === 'core') return fixed ? c.res !== false : c.res === true; // 핵심: 자동은 확인돼야, 직접 고르면 아니라고만 안 나오면
+      if (c.kind === 'core') return confirmed ? c.res !== false : c.res === true;
       if (fixed) return true;                                                    // 직접 고른 운동은 핵심 조건만 본다
       return c.res !== false;                                                    // 자동: 탈락만 막고 모름은 넘어간다
     });
     if (this.log.length < this.o.logLimit) {
       this.log.push({
         ex: ex.id, ...rep, valid,
-        failed: checks.filter((c) => c.res === false || (c.kind === 'core' && c.res === null && !fixed))
+        failed: checks.filter((c) => c.res === false || (c.kind === 'core' && c.res === null && !confirmed))
           .map((c) => (c.res === null ? `${c.name}(안 보임)` : c.name)),
       });
     }
     if (!valid) return;
-    this.counters[ex.id].accept(rep.amp);
+    if (ex.sided && this.counters[ex.id].isDuplicate(rep)) return;
+    this.counters[ex.id].accept(rep.amp, rep);
     const issues = ex.form ? ex.form(w, b).filter((row) => row[1] === true).map((row) => row[0]) : [];
     const r = { ...rep, ex: ex.id, issues };
 
@@ -251,7 +263,8 @@ export class Tracker {
       if (r.tempo !== undefined) continue;
       const next = s.reps[i + 1];
       const pts = this._window(r.tStart - 0.6, next ? next.tStart + 0.3 : this.t)
-        .map((f) => ({ t: f.t, s: ex.signal(f), d: ex.tempo.dist ? ex.tempo.dist(f) : NaN }));
+        .map((f) => { const a = r.side ? armFeatures(f, r.side) : f;
+          return { t: f.t, s: ex.signal(a), d: ex.tempo.dist ? ex.tempo.dist(a) : NaN }; });
       const m = measureRep(pts, r, { final: final || !!next, minRange: 0.6 * ex.prom });
       if (!m && !final && !next) continue;
       r.tempo = toPhases(m, ex.tempo.first);

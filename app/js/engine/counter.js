@@ -122,3 +122,40 @@ export class RepCounter {
     return null;
   }
 }
+
+// 양팔 동시 반복은 1회, 교대·한팔 반복은 한쪽마다 1회.
+// 팔꿈치 최소값 하나로 합치면 반대편 팔을 굽힌 채 쉬는 동안 움직이는 팔의 반복이 사라진다.
+export class ArmRepCounter {
+  constructor(spec) {
+    this.sides = Object.fromEntries(['L', 'R'].map((side) => [side, new RepCounter({ ...spec, gapReset: 0.6 })]));
+    this.accepted = [];
+  }
+  update(t, values) {
+    const out = [];
+    for (const [side, c] of Object.entries(this.sides)) {
+      if (!Number.isFinite(values[side]) && t - c.lastT > c.gapReset) c.reset();
+      const r = c.update(t, values[side]);
+      if (r) out.push({ ...r, side });
+    }
+    return out.sort((a, b) => b.amp - a.amp);
+  }
+  isDuplicate(rep) {
+    return this.accepted.some((r) => {
+      if (r.side === rep.side) return false;
+      const tolerance = Math.min(0.6, Math.max(0.2, Math.max(r.tEnd-r.tStart, rep.tEnd-rep.tStart) * 0.25));
+      // 저프레임·한쪽 팔의 평평한 신호는 최저점 시각이 밀릴 수 있다.
+      // 시작과 끝도 함께 맞으면 같은 양팔 동작이다. 교대 동작은 양 끝이 어긋난다.
+      const samePhase = Math.abs(r.tBottom-rep.tBottom) <= tolerance
+        || (Math.abs(r.tStart-rep.tStart) <= tolerance && Math.abs(r.tEnd-rep.tEnd) <= tolerance);
+      return samePhase && Math.max(r.tStart, rep.tStart) < Math.min(r.tEnd, rep.tEnd);
+    });
+  }
+  accept(amp, rep) {
+    this.sides[rep.side].accept(amp);
+    this.accepted.push(rep);
+    this.accepted = this.accepted.filter((r) => rep.tEnd - r.tEnd < 3);
+  }
+  clearAdapt() { for (const c of Object.values(this.sides)) c.clearAdapt(); this.accepted = []; }
+  get mode() { return Object.values(this.sides).some((c) => c.mode === 'valley') ? 'valley' : 'peak'; }
+  get peak() { return Object.values(this.sides).filter((c) => c.mode === 'valley' && c.peak).sort((a, b) => b.peak.t - a.peak.t)[0]?.peak; }
+}

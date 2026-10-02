@@ -1,0 +1,119 @@
+{
+  "_method": "원본 영상 장면을 먼저 보고 정답을 확정. GIF는 반복 재생 없이 1주기만. 기존 평가와 별도 표이며 앱 기본 세트 기준 2회를 변경하지 않음.",
+  "pullover_strengthlog": {
+    "exercise": "pullover",
+    "reps": 1,
+    "minSetReps": 1,
+    "mode": "fixed",
+    "split": "dev",
+    "view": "대각선·GIF 1주기",
+    "sourceRuntime": "Python/CPU full-model",
+    "source": "https://www.strengthlog.com/dumbbell-pullover/",
+    "extraction": "MediaPipe Python 0.10.21/CPU; app/vendor/mediapipe/models/pose_landmarker_full.task"
+  },
+  "shrug_strengthlog": {
+    "exercise": "shrug",
+    "reps": 1,
+    "minSetReps": 1,
+    "mode": "fixed",
+    "split": "dev",
+    "view": "정면·GIF 1주기",
+    "sourceRuntime": "Python/CPU full-model",
+    "source": "https://www.strengthlog.com/dumbbell-shrug/",
+    "extraction": "MediaPipe Python 0.10.21/CPU; app/vendor/mediapipe/models/pose_landmarker_full.task"
+  },
+  "concentration_strengthlog": {
+    "exercise": "concentrationcurl",
+    "reps": 1,
+    "minSetReps": 1,
+    "mode": "fixed",
+    "split": "dev",
+    "view": "대각선·GIF 1주기",
+    "sourceRuntime": "Python/CPU full-model",
+    "source": "https://www.strengthlog.com/concentration-curl/",
+    "extraction": "MediaPipe Python 0.10.21/CPU; app/vendor/mediapipe/models/pose_landmarker_full.task"
+  },
+  "hammer_strengthlog": {
+    "exercise": "hammercurl",
+    "reps": 1,
+    "minSetReps": 1,
+    "mode": "fixed",
+    "split": "dev",
+    "view": "정면·양팔 함께·GIF 1주기",
+    "sourceRuntime": "Python/CPU full-model",
+    "source": "https://www.strengthlog.com/hammer-curl/",
+    "extraction": "MediaPipe Python 0.10.21/CPU; app/vendor/mediapipe/models/pose_landmarker_full.task"
+  },
+  "dbbench_strengthlog": {
+    "exercise": "dumbbellbench",
+    "reps": 1,
+    "minSetReps": 1,
+    "mode": "fixed",
+    "split": "dev",
+    "view": "대각선·덤벨·GIF 1주기",
+    "sourceRuntime": "Python/CPU full-model",
+    "source": "https://www.strengthlog.com/dumbbell-chest-press/",
+    "extraction": "MediaPipe Python 0.10.21/CPU; app/vendor/mediapipe/models/pose_landmarker_full.task",
+    "limitedView": true,
+    "note": "실제 1회이나 발 쪽 대각선에서 팔 검출 실패. 5/43프레임만 포즈 검출되어 인식 0회. 실패 사례를 유지함."
+  },
+  "goblet_strengthlog": {
+    "exercise": "gobletsquat",
+    "reps": 1,
+    "minSetReps": 1,
+    "mode": "fixed",
+    "split": "dev",
+    "view": "정면·GIF 1주기",
+    "sourceRuntime": "Python/CPU full-model",
+    "source": "https://www.strengthlog.com/goblet-squat/",
+    "extraction": "MediaPipe Python 0.10.21/CPU; app/vendor/mediapipe/models/pose_landmarker_full.task"
+  },
+  "dbrdl_strengthlog": {
+    "exercise": "dumbbellrdl",
+    "reps": 1,
+    "minSetReps": 1,
+    "mode": "fixed",
+    "split": "dev",
+    "view": "측면·GIF 1주기",
+    "sourceRuntime": "Python/CPU full-model",
+    "source": "https://www.strengthlog.com/dumbbell-romanian-deadlift/",
+    "extraction": "MediaPipe Python 0.10.21/CPU; app/vendor/mediapipe/models/pose_landmarker_full.task"
+  },
+  "concentration_puregym": {
+    "exercise": "concentrationcurl",
+    "reps": 3,
+    "mode": "fixed",
+    "split": "holdout",
+    "range": [
+      13.2,
+      21.84
+    ],
+    "view": "대각선·전신 구간만(앞의 근접 편집 제외)",
+    "source": "https://www.youtube.com/watch?v=llD6MImgqe8",
+    "extraction": "MediaPipe Python 0.10.21/CPU; app/vendor/mediapipe/models/pose_landmarker_full.task",
+    "note": "전신 구간 시작 시 첫 컬이 이미 진행 중이라 처음 1회 누락 가능. 초기 결과 2/3회. 이 영상 결과로 규칙을 조정하지 않음."
+  },
+  "kickback_puregym": {
+    "exercise": "kickback",
+    "reps": 1,
+    "minSetReps": 1,
+    "mode": "fixed",
+    "split": "dev",
+    "range": [
+      0,
+      6.6
+    ],
+    "view": "대각선·전신 구간만(뒤의 근접 편집 제외)",
+    "source": "https://www.youtube.com/watch?v=JPmbMOu4IYw",
+    "extraction": "MediaPipe Python 0.10.21/CPU; app/vendor/mediapipe/models/pose_landmarker_full.task"
+  },
+  "dbbench_puregym": {
+    "exercise": "dumbbellbench",
+    "reps": 5,
+    "mode": "fixed",
+    "split": "dev",
+    "view": "벤치 옆 대각선·15초·완전한 하강→상승 5회",
+    "source": "https://www.puregym.com/exercises/chest/bench-press/dumbbell-bench-press/",
+    "extraction": "MediaPipe Python 0.10.21/CPU; app/vendor/mediapipe/models/pose_landmarker_full.task"
+  }
+}

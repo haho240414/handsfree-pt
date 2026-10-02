@@ -22,6 +22,9 @@ const PICK = {
   russian: ['russian_larsen', [4.3, 13.2]], bicycle: ['bicycle_medbridge', [10, 17]], sideplank: ['sideplank_nasm', [2, 12]],
   jumpingjack: ['jacks_xhit'], climber: ['climber_grouphiit'], burpee: ['burpee_crossfit'], kbswing: ['kbswing_strongfirst'],
   highknees: ['highknees_puregym', null, 'highknees_xhit'],
+  kickback: ['kickback_puregym', [0, 6.6]], concentrationcurl: ['concentration_strengthlog'],
+  pullover: ['pullover_strengthlog'], shrug: ['shrug_strengthlog'], hammercurl: ['hammer_strengthlog'],
+  gobletsquat: ['goblet_strengthlog'], dumbbellrdl: ['dbrdl_strengthlog'], dumbbellbench: ['dbbench_puregym'],
 };
 // 영상이 없는 운동: 비슷한 자세를 빌려 정지 화면으로
 const STILL = { plank: ['pushup_isolated_side', 'top'] };

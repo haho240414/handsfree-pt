@@ -217,7 +217,8 @@ export class Workout {
     else this._schedule();
     this.ticker = setInterval(() => this._tick(), 250);
     this._hud();
-    if (!this.isFile) this.voice.say('카메라에 전신이 들어오도록 자리 잡아 주세요.');
+    if (!this.isFile) this.voice.say(this._framingOptions(this.tracker.snapshot()).upperBody
+      ? '카메라에 상체와 움직이는 팔 전체가 들어오도록 자리 잡아 주세요.' : '카메라에 전신이 들어오도록 자리 잡아 주세요.');
   }
 
   _prepareHUD() {
@@ -230,7 +231,7 @@ export class Workout {
     $('wo-subheading').textContent=this.plan ? this.session.plan.name : this.session.candidates?.length ? this.session.candidates.map(exName).join(' · ') : '자유 운동';
     this.el.plan.hidden=true;this.el.next.hidden=true;
     this.el.dot.className=`dot ${this.ready?'ok':'warn'}`;
-    this.el.status.textContent=this.ready ? (frame?'자세를 확인했어요':'전신이 보여요') : '촬영 위치를 확인해 주세요';
+    this.el.status.textContent=this.ready ? (frame?'자세를 확인했어요':this._framingOptions(snap).upperBody?'팔과 상체가 보여요':'전신이 보여요') : '촬영 위치를 확인해 주세요';
     this.el.framing.hidden=!frame;this.el.framing.textContent=frame?.text||'';
     this.el.frame.hidden=false;this.el.frame.className=`wo-frame ${good?'ok':'bad'}`;
     this.primary.disabled=!this.ready || this.phase==='countdown' || this.switchingCamera;
@@ -1191,9 +1192,12 @@ export class Workout {
   }
 
   // 화면 구도: 안 보이는 부위에 따라 어떻게 하면 되는지. speak = 소리로도 알려줄 만큼 중요한지
-  _framing(snap) {
-    return framingIssue(snap);
+  _framingOptions(snap) {
+    const ex = EXERCISE_BY_ID[this.tracker.o.fixed || snap.exercise];
+    const upperBody = ex && ['팔', '등', '가슴·어깨'].includes(ex.group);
+    return { upperBody, bothArms: ex && ['fly', 'reversefly'].includes(ex.id) };
   }
+  _framing(snap) { return framingIssue(snap, this._framingOptions(snap)); }
 
   // 구도 안내 음성: 첫 세트를 기록하기 전(자리 잡는 중)에만, 3초 넘게 계속될 때, 같은 말은 두 번까지, 12초 간격
   _sayFraming(frame, now) {

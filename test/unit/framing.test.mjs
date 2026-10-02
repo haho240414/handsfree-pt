@@ -40,3 +40,14 @@ test('운동 중 잠깐 가린 1프레임에는 안내가 깜빡이지 않고 �
   assert.equal(guide.update(null, 2000), issue);
   assert.equal(guide.update(null, 2500), null);
 });
+
+test('팔 운동을 골랐으면 잘 보이는 상체를 더 멀리 보내지 않고 손목 가림을 안내한다', () => {
+  const upper=good(); upper.raw.seen.arms=true; upper.raw.seen.bothArms=true;
+  upper.raw.seen.knees=false; upper.raw.seen.feet=false;
+  upper.raw.cutoff=true; upper.raw.upperCutoff=false; upper.raw.torsoFrac=0.48;
+  assert.equal(framingIssue(upper,{upperBody:true}),null);
+  upper.raw.seen.arms=false;
+  assert.equal(framingIssue(upper,{upperBody:true}).code,'hands');
+  upper.raw.seen.arms=true; upper.raw.seen.bothArms=false;
+  assert.equal(framingIssue(upper,{upperBody:true,bothArms:true}).code,'hands');
+});
