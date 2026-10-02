@@ -1181,3 +1181,16 @@ body.in-workout .tabbar {
   min-height:48px;
   margin:8px 0 20px
 }
+/* Keep all three modes and the start action visible on short phone screens. */
+@media (max-height:740px) and (orientation:portrait) {
+  #screen-home.page { padding-top:calc(14px + var(--safe-t)); }
+  #screen-home .home-heading { margin:20px 0 20px; }
+  #screen-home .home-heading h1 { font-size:28px; }
+  #screen-home .home-heading p { font-size:14px; margin-top:10px; }
+  #screen-home .start-grid { gap:8px; }
+  #screen-home .mode-row { min-height:72px; padding:8px 14px; gap:12px; }
+  #screen-home .mode-row>.ui-icon { width:24px; height:24px; }
+  #screen-home .mode-row b { font-size:18px; }
+  #screen-home .mode-row small { font-size:13px; }
+  #screen-home .home-start { margin-top:16px; min-height:52px; font-size:18px; }
+}
