@@ -13,7 +13,7 @@ export const fmtTime = (ms) => {
   const d = new Date(ms);
   return `${d.getHours() < 12 ? '오전' : '오후'} ${((d.getHours() + 11) % 12) + 1}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
-export const minutes = (sess) => Math.max(1, Math.round(((sess.end || sess.start) - sess.start) / 60000));
+export const minutes = (sess) => Math.max(1, Math.round(sess.activeSec != null ? sess.activeSec / 60 : ((sess.end || sess.start) - sess.start) / 60000));
 export const setValue = (s) => (s.kind === 'hold' ? `${s.holdSec}초` : `${s.reps}회`);
 
 export function sessionTotals(sess) {
@@ -37,5 +37,5 @@ export function sessionItem(sess) {
   return `<button class="session-item" data-session="${esc(sess.id)}">
     <div class="session-date"><div class="d">${d.getDate()}</div><div class="m">${d.getMonth() + 1}월 ${DAYS[d.getDay()]}</div></div>
     <div class="session-main"><div class="t">${tot.min}분 · ${tot.reps}회 · ${tot.sets}세트</div>
-    <div class="s">${esc(sessionLine(sess)) || '기록 없음'}</div></div><span class="chev">›</span></button>`;
+    <div class="s">${esc(sessionLine(sess)) || '기록 없음'}</div></div><img class="ui-icon" src="./icons/ui/caret-right.svg" alt=""></button>`;
 }

@@ -14,46 +14,36 @@
   <link rel="icon" href="./icons/icon-192.png">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="stylesheet" href="./css/app.css">
+  <link rel="stylesheet" href="./css/redesign.css">
 </head>
 <body>
   <!-- 홈 -->
   <section id="screen-home" class="screen page" data-tab="home">
     <header class="topbar">
-      <div class="brand"><span class="brand-mark" aria-hidden="true"></span>핸즈프리 PT</div>
+      <div class="brand">핸즈프리 PT</div>
+      <button class="icon-btn" data-go="settings" aria-label="설정"><img class="ui-icon" src="./icons/ui/gear.svg" alt=""></button>
     </header>
-    <p class="today-label" id="today-label"></p>
-    <div class="card today-card" id="today-card"></div>
-    <div class="start-grid">
-      <button class="btn btn-primary btn-xl" id="btn-start-auto">
-        <span class="btn-title">자유 운동</span>
-        <span class="btn-sub">하고 싶은 운동을 그냥 하면 알아서 알아보고 세요</span>
-      </button>
-      <button class="btn btn-secondary btn-xl btn-routine" id="btn-open-routine">
-        <span class="btn-title">오늘의 루틴 <span class="pt-badge">PT</span></span>
-        <span class="btn-sub" id="routine-sub">루틴을 짜 주고, 할 운동·횟수를 안내해요</span>
-      </button>
+    <div class="home-heading"><h1>운동을 시작하세요</h1><p class="muted">휴대폰을 세워 두고, 편하게 움직이세요.</p></div>
+    <div class="start-grid" role="group" aria-label="운동 방식">
+      <button class="mode-row" id="btn-start-auto" aria-pressed="true" data-mode="auto"><img class="ui-icon" src="./icons/ui/person-simple.svg" alt=""><span><b>자유 운동</b><small>동작을 인식해 횟수를 셉니다.</small></span><img class="mode-check ui-icon" src="./icons/ui/check.svg" alt=""></button>
+      <button class="mode-row" id="btn-home-pick" aria-pressed="false" data-mode="pick"><img class="ui-icon" src="./icons/ui/barbell.svg" alt=""><span><b>운동 선택</b><small>한 가지 운동에 집중하기</small></span><img class="mode-check ui-icon" src="./icons/ui/check.svg" alt=""></button>
+      <button class="mode-row" id="btn-open-routine" aria-pressed="false" data-mode="routine"><img class="ui-icon" src="./icons/ui/list-bullets.svg" alt=""><span><b>루틴</b><small id="routine-sub">목표에 맞춰 순서대로 운동하기</small></span><img class="mode-check ui-icon" src="./icons/ui/check.svg" alt=""></button>
     </div>
-    <div class="howto card">
-      <div class="howto-title">이렇게 쓰세요</div>
-      <ol>
-        <li>폰을 바닥·선반에 세우고 <b>2~3m 뒤로</b> — 화면 테두리가 <b>초록</b>이 되면 자리 완료</li>
-        <li><b>자유 운동</b>: 아무 운동이나 하면 “스쿼트, 둘”처럼 알아서 세요</li>
-        <li><b>오늘의 루틴</b>: 할 운동·목표 횟수를 화면과 음성으로 안내하고, 목표를 채우면 휴식 → 다음 세트</li>
-      </ol>
-      <p class="muted small">무음 모드를 끄고 소리를 켜 두세요. 영상은 폰 밖으로 나가지 않아요.</p>
-    </div>
-    <h2 class="section-title">최근 운동</h2>
+    <button class="btn btn-primary btn-lg home-start" id="btn-home-start">운동 시작 <img class="ui-icon" src="./icons/ui/arrow-right.svg" alt=""></button>
+    <div class="recent-heading"><h2 class="section-title">최근 운동</h2><button class="text-btn" data-go="history">전체 보기 <img class="ui-icon" src="./icons/ui/caret-right.svg" alt=""></button></div>
     <div id="recent-list" class="session-list"></div>
   </section>
 
   <!-- 운동 고르기 -->
   <section id="screen-pick" class="screen page" hidden>
     <header class="topbar">
-      <button class="icon-btn" data-back aria-label="뒤로">‹</button>
+      <button class="icon-btn" data-back aria-label="뒤로"><img class="ui-icon" src="./icons/ui/arrow-left.svg" alt=""></button>
       <div class="topbar-title">오늘 할 운동</div>
       <span></span>
     </header>
     <p class="muted">고른 운동 안에서만 자동으로 알아봐요. 하나만 고르면 1회째부터 셉니다.</p>
+    <label class="sr-only" for="pick-search">운동 검색</label><input class="pick-search" id="pick-search" type="search" placeholder="운동 이름 검색" autocomplete="off">
+    <div class="seg pick-filters" role="group" aria-label="운동 목록"><button data-pick-filter="all" aria-pressed="true">전체</button><button data-pick-filter="recent" aria-pressed="false">최근</button><button data-pick-filter="favorites" aria-pressed="false">즐겨찾기</button></div>
     <div id="pick-groups"></div>
     <div class="sticky-bottom">
       <button class="btn btn-primary btn-lg" id="btn-start-picked" disabled>운동을 골라 주세요</button>
@@ -61,15 +51,15 @@
   </section>
 
   <!-- 오늘의 루틴 (PT 모드) -->
-  <section id="screen-routine" class="screen page" hidden>
+  <section id="screen-routine" class="screen page" data-tab="home" hidden>
     <header class="topbar">
-      <button class="icon-btn" data-back aria-label="뒤로">‹</button>
-      <div class="topbar-title">오늘의 루틴</div>
-      <span></span>
+      <button class="icon-btn" data-back aria-label="뒤로"><img class="ui-icon" src="./icons/ui/arrow-left.svg" alt=""></button>
+      <div class="brand">핸즈프리 PT</div>
+      <button class="icon-btn" data-go="settings" aria-label="설정"><img class="ui-icon" src="./icons/ui/gear.svg" alt=""></button>
     </header>
     <div id="routine-body"></div>
     <button class="link-card" id="btn-start-pick" type="button">
-      <span><b>목표 없이 운동만 골라서 하기</b><br><span class="muted small">고른 운동 안에서만 자동 인식 · 헬스장 자유 운동</span></span><span aria-hidden="true">›</span>
+      <span>운동 선택</span><img class="ui-icon" src="./icons/ui/caret-right.svg" alt="">
     </button>
     <div class="sticky-bottom">
       <button class="btn btn-primary btn-lg" id="btn-start-routine" disabled>루틴을 짜 주세요</button>
@@ -78,17 +68,20 @@
 
   <!-- 운동 중 -->
   <section id="screen-workout" class="screen workout" hidden>
-    <video id="cam" playsinline muted autoplay></video>
-    <canvas id="skeleton"></canvas>
-    <div class="wo-frame" id="wo-frame" hidden></div>
     <div class="wo-top">
-      <div class="wo-status"><span class="dot" id="wo-dot"></span><span id="wo-status-text">준비 중</span></div>
+      <div><h1 id="wo-heading">운동 준비</h1><p id="wo-subheading">자유 운동</p></div>
       <div class="wo-clock" id="wo-clock">0:00</div>
       <div class="wo-actions">
-        <button class="wo-btn" id="btn-voice" aria-label="음성 끄기/켜기">🔊</button>
+        <button class="wo-btn" id="btn-voice" aria-label="음성 끄기/켜기"><img class="ui-icon" src="./icons/ui/speaker-high.svg" alt=""></button>
         <button class="wo-btn wo-end" id="btn-end">종료</button>
       </div>
     </div>
+    <div class="camera-preview" id="wo-preview">
+      <video id="cam" playsinline muted autoplay></video>
+      <canvas id="skeleton"></canvas>
+      <div class="wo-frame" id="wo-frame" hidden></div>
+    </div>
+    <div class="wo-status" role="status"><span class="dot" id="wo-dot"></span><span id="wo-status-text">준비 중</span></div>
     <div class="wo-camera" id="wo-camera" hidden></div>
     <div class="wo-framing" id="wo-framing" role="status" hidden></div>
     <div class="wo-plan" id="wo-plan" hidden>
@@ -98,18 +91,31 @@
     <div class="wo-center">
       <div class="wo-exercise" id="wo-exercise"></div>
       <div class="wo-count-row"><div class="wo-count" id="wo-count"></div><div class="wo-target" id="wo-target" hidden></div></div>
+      <progress class="wo-progress" id="wo-progress" max="1" value="0" aria-label="현재 세트 목표 진행률" hidden></progress>
       <div class="wo-message" id="wo-message"></div>
       <div class="wo-cue" id="wo-cue" hidden></div>
       <div class="wo-rest-actions" id="wo-rest-actions" hidden>
         <button class="wo-btn" id="btn-rest-plus" type="button">+30초</button>
         <button class="wo-btn" id="btn-rest-skip" type="button">휴식 끝내기</button>
       </div>
+
+    </div>
+    <div class="wo-rest-record" id="wo-rest-record" hidden>
+      <p class="muted">방금 한 세트</p><div class="rest-record-row"><b id="wo-last-name"></b><b id="wo-last-value"></b></div>
+      <button class="text-btn" id="btn-last-edit">횟수 수정 <img class="ui-icon" src="./icons/ui/pencil-simple.svg" alt=""></button>
+      <div class="rest-next"><p class="muted">다음 세트</p><b id="wo-rest-next"></b></div>
+    </div>
+    <div class="wo-primary-actions">
+      <button class="btn wo-primary" id="btn-workout-primary" disabled>전신을 화면에 맞춰 주세요</button>
+      <button class="text-btn" id="btn-set-end" hidden>이 세트 끝내기</button>
+      <button class="text-btn" id="btn-camera-help">촬영 위치 도움말</button>
+      <button class="text-btn" id="btn-camera-flip"><img class="ui-icon" src="./icons/ui/camera-rotate.svg" alt=""> 카메라 전환</button>
+    </div>
+    <details class="wo-bottom" id="wo-bottom"><summary>운동 상세</summary>
       <div class="wo-adjust" id="wo-adjust" hidden>
         <div class="adj" id="adj-w"><button class="wo-btn" type="button" data-adj="w" data-d="-1" aria-label="무게 줄이기">−</button><span id="adj-w-val"></span><button class="wo-btn" type="button" data-adj="w" data-d="1" aria-label="무게 늘리기">+</button></div>
         <div class="adj" id="adj-r"><button class="wo-btn" type="button" data-adj="r" data-d="-1" aria-label="목표 줄이기">−</button><span id="adj-r-val"></span><button class="wo-btn" type="button" data-adj="r" data-d="1" aria-label="목표 늘리기">+</button></div>
       </div>
-    </div>
-    <div class="wo-bottom" id="wo-bottom">
       <div class="wo-next" id="wo-next" hidden>
         <div class="wo-next-row"><canvas class="wo-demo" id="wo-demo" hidden aria-hidden="true"></canvas><div class="wo-next-text" id="wo-next-text"></div></div>
         <div class="wo-next-actions">
@@ -122,7 +128,7 @@
         <canvas id="wo-tempo-canvas" aria-hidden="true"></canvas>
       </div>
       <div class="wo-sets" id="wo-sets"></div>
-    </div>
+    </details>
     <div class="wo-debug" id="wo-debug" hidden></div>
     <div class="wo-loading" id="wo-loading">
       <div class="spinner"></div>
@@ -131,15 +137,15 @@
   </section>
 
   <!-- 운동 요약 / 세션 상세 -->
-  <section id="screen-summary" class="screen page" hidden>
+  <section id="screen-summary" class="screen page" data-tab="history" hidden>
     <header class="topbar">
-      <button class="icon-btn" data-back aria-label="닫기">‹</button>
-      <div class="topbar-title" id="summary-title">운동 완료</div>
-      <button class="icon-btn danger" id="btn-delete-session" aria-label="이 운동 기록 삭제">🗑</button>
+      <button class="icon-btn" data-back aria-label="닫기"><img class="ui-icon" src="./icons/ui/arrow-left.svg" alt=""></button>
+      <div class="brand">핸즈프리 PT</div><span id="summary-title" hidden>운동 완료</span>
+      <button class="icon-btn danger" id="btn-delete-session" aria-label="이 운동 기록 삭제"><img class="ui-icon" src="./icons/ui/trash.svg" alt=""></button>
     </header>
     <div id="summary-body"></div>
     <div class="sticky-bottom">
-      <button class="btn btn-primary btn-lg" id="btn-summary-done">저장하고 닫기</button>
+      <button class="btn btn-primary btn-lg" id="btn-summary-done">완료</button>
     </div>
   </section>
 
@@ -156,9 +162,9 @@
   </section>
 
   <nav class="tabbar" id="tabbar">
-    <button data-go="home" class="active"><span class="tab-ico">⌂</span>홈</button>
-    <button data-go="history"><span class="tab-ico">▦</span>기록</button>
-    <button data-go="settings"><span class="tab-ico">⚙</span>설정</button>
+    <button data-go="home" class="active"><img class="ui-icon" src="./icons/ui/house.svg" alt="">운동</button>
+    <button data-go="history"><img class="ui-icon" src="./icons/ui/chart-bar.svg" alt="">기록</button>
+    <button data-go="settings"><img class="ui-icon" src="./icons/ui/gear.svg" alt="">설정</button>
   </nav>
 
   <div class="toast" id="toast" hidden></div>

@@ -1,5 +1,8 @@
 // 운동 화면: 카메라 → 포즈 인식 → 추적기 → 음성·화면 안내 → 세트 기록
 
+import { SessionClock } from './session-clock.js';
+import { editRecordedSet } from './session-edit.js';
+import { icon } from './icons.js';
 import { Tracker } from './engine/tracker.js';
 import { isHandsUp } from './engine/features.js';
 import { EXERCISE_BY_ID } from './engine/exercises.js';
@@ -43,6 +46,7 @@ export class Workout {
     this.tilt = new TiltSensor();
     this.diag = new DiagRecorder();
     this.running = false;
+    this.clock = new SessionClock();
     this.el = {
       screen: $('screen-workout'), video: $('cam'), canvas: $('skeleton'),
       dot: $('wo-dot'), status: $('wo-status-text'), clock: $('wo-clock'),
@@ -55,8 +59,21 @@ export class Workout {
       plan: $('wo-plan'), planStep: $('wo-plan-step'), planSets: $('wo-plan-sets'), planFill: $('wo-plan-fill'),
       target: $('wo-target'), next: $('wo-next'), nextText: $('wo-next-text'), planDoneBtn: $('btn-plan-done'), demo: $('wo-demo'),
     };
+    this.primary = $('btn-workout-primary');
+    this.primary.addEventListener('click', () => {
+      if (this.phase === 'prepare' && this.ready) { this.phase = 'countdown'; this.countdownUntil = performance.now()+3000; this.voice.say('셋, 둘, 하나'); }
+      else if (this.phase === 'paused') this.resume();
+      else if (this.restUntil) this.skipRest();
+      else if (this.phase === 'work') this.pause();
+      this._hud();
+    });
+    $('btn-set-end').addEventListener('click', () => this.completeCurrentSet());
+    $('btn-last-edit').addEventListener('click', () => this.editLastSet());
+    $('btn-camera-flip').addEventListener('click', () => this.flipCamera());
+    $('btn-camera-help').addEventListener('click', () => this.cameraHelp());
+    document.addEventListener('visibilitychange', () => { if (document.hidden && this.phase === 'work' && !this.isFile) this.pause(); });
     // 루틴(PT 모드): 인식이 안 될 때를 위한 수동 버튼
-    $('btn-plan-done').addEventListener('click', () => { if (this.plan && this.pt?.stage === 'work') this._ptComplete({ manual: true }); });
+    $('btn-plan-done').addEventListener('click', () => this.completeCurrentSet());
     $('btn-plan-skip').addEventListener('click', () => this._ptSkip());
     // 쉬는 동안 다음 세트 무게·목표 바로 고치기
     $('wo-adjust').addEventListener('click', (e) => {
@@ -70,17 +87,13 @@ export class Workout {
       this.restSaid = new Set(); // 늘린 만큼 알림을 다시
       this._hud();
     });
-    $('btn-rest-skip').addEventListener('click', () => {
-      if (!this.restUntil) return;
-      this.restUntil = 0;
-      this.voice.say('다음 세트를 시작하세요.', { interrupt: true });
-      this._hud();
-    });
+    $('btn-rest-skip').addEventListener('click', () => this.skipRest());
     this.el.endBtn.addEventListener('click', () => this.end());
     this.el.voiceBtn.addEventListener('click', () => {
       this.voice.enabled = !this.voice.enabled;
       if (!this.voice.enabled) this.voice.stop();
-      this.el.voiceBtn.textContent = this.voice.enabled ? '🔊' : '🔇';
+      this.el.voiceBtn.innerHTML = icon(this.voice.enabled ? 'speaker-high' : 'speaker-slash');
+      this.el.voiceBtn.setAttribute('aria-pressed', String(this.voice.enabled));
     });
   }
 
@@ -96,17 +109,27 @@ export class Workout {
     this.voice.style = st.countStyle;
     this.voice.unlock(); // 시작 버튼 탭 안에서 소리 잠금 해제
     if (!source) this.tilt.start(); // 폰 기울기 센서 (iOS 는 이 탭 안에서 권한을 물어야 함)
-    this.el.voiceBtn.textContent = this.voice.enabled ? '🔊' : '🔇';
+    this.el.voiceBtn.innerHTML = icon(this.voice.enabled ? 'speaker-high' : 'speaker-slash');
+      this.el.voiceBtn.setAttribute('aria-pressed', String(this.voice.enabled));
     // 저장값이 깨져 있어도(옛 백업 등) 멈추지 않게 숫자 배열로 맞춘다
     const alerts = [].concat(st.restAlerts ?? [10]).map(Number).filter((n) => n > 0);
     this.cfg = { cues: st.cues, rest: Number(st.rest) || 0, debug: st.debug, restAlerts: alerts, setEndSec: Number(st.setEndSec) || 0 };
     this.isFile = !!source;
+    this.phase = source ? 'work' : 'prepare';
+    this.ready = false;
+    this.readySince = null;
+    this.clock = new SessionClock();
+    this.primary.disabled = true;
+    this.primary.hidden = this.isFile;
+    this.el.screen.dataset.phase = this.phase;
+    $('wo-bottom').open = false;
     this.el.screen.hidden = false;
     this.el.screen.classList.toggle('mirror', st.mirror && !source); // 후면 카메라면 카메라를 연 뒤 끈다
     document.body.classList.add('in-workout');
+    document.querySelectorAll('.screen.page').forEach(page=>page.inert=true);
     this.el.debug.hidden = !st.debug;
     this.el.loading.hidden = false;
-    this.el.loadingText.textContent = 'AI 자세 인식 준비 중…';
+    this.el.loadingText.textContent = '자세 인식 준비 중…';
     this.el.sets.innerHTML = '';
     this._setText('exercise', '');
     this._setText('count', '');
@@ -119,6 +142,7 @@ export class Workout {
       mode: plan ? 'routine' : candidates?.length ? 'pick' : 'auto', candidates: candidates || null,
       source: source ? 'video' : 'camera',
     };
+    const startingSession = this.session;
     this.plan = plan?.items?.length ? new PlanRunner(plan.items) : null;
     if (this.plan) loadDemos();
     this._setDemo(null);
@@ -167,6 +191,7 @@ export class Workout {
 
     try {
       await this._openSource(source, st);
+      if (this.session !== startingSession) return;
       const key = `${st.model}-${st.gpu ? 'auto' : 'CPU'}`;
       if (st.gpu && !landmarkers[key]) guard('starting');
       landmarkers[key] ||= await createPoseLandmarker({
@@ -178,26 +203,167 @@ export class Workout {
       this.diag.event(0, 'ready', { delegate: this.landmarker?.delegate ?? null, video: [this.el.video.videoWidth, this.el.video.videoHeight], camera: this.camInfo ?? null });
     } catch (e) {
       console.error(e);
-      if (this.session) this._fail(e);
+      if (this.session === startingSession) this._fail(e);
       return;
     }
-    if (!this.session) return; // 준비 중에 닫힘
+    if (this.session !== startingSession) return; // 준비 중에 닫힘
     this.el.loading.hidden = true;
     this.t0 = performance.now();
     this.wallT0 = Date.now();
+    if (this.isFile) this.clock.start(this.t0);
     this.running = true;
     this._keepAwake();
     if (this.isFile) this._runFile();
     else this._schedule();
     this.ticker = setInterval(() => this._tick(), 250);
-    if (this.plan) {
-      this.pt.readyAt = performance.now();
-      const it = this.plan.item;
-      const n = this.plan.items.filter((x) => !isTimer(x)).length;
-      this.voice.say(isTimer(it)
-        ? `오늘 루틴 시작. ${n}가지 운동이에요. 먼저 ${it.name}부터 할게요.`
-        : `오늘 루틴 시작. ${n}가지 운동이에요. 첫 운동은 ${exName(it.exercise)} ${this._targetWords(it)} ${it.sets}세트. ${EXERCISE_BY_ID[it.exercise]?.tip ?? ''}`);
-    } else if (!this.isFile) this.voice.say('준비됐어요. 전신이 보이게 뒤로 가 주세요.');
+    this._hud();
+    if (!this.isFile) this.voice.say('카메라에 전신이 들어오도록 자리 잡아 주세요.');
+  }
+
+  _prepareHUD() {
+    const now=performance.now(), snap=this.tracker.snapshot(), frame=this._framing(snap);
+    const good=snap.present && (!frame || frame.code==='feet');
+    if(good) this.readySince ??= now; else this.readySince=null;
+    this.ready=good && now-this.readySince>=600;
+    this.el.screen.dataset.phase=this.phase;
+    $('wo-heading').textContent='운동 준비';
+    $('wo-subheading').textContent=this.plan ? this.session.plan.name : this.session.candidates?.length ? this.session.candidates.map(exName).join(' · ') : '자유 운동';
+    this.el.plan.hidden=true;this.el.next.hidden=true;
+    this.el.dot.className=`dot ${this.ready?'ok':'warn'}`;
+    this.el.status.textContent=this.ready ? (frame?'자세를 확인했어요':'전신이 보여요') : '촬영 위치를 확인해 주세요';
+    this.el.framing.hidden=!frame;this.el.framing.textContent=frame?.text||'';
+    this.el.frame.hidden=false;this.el.frame.className=`wo-frame ${good?'ok':'bad'}`;
+    this.primary.disabled=!this.ready || this.phase==='countdown' || this.switchingCamera;
+    this.primary.textContent=this.phase==='countdown'?`${Math.max(1,Math.ceil((this.countdownUntil-now)/1000))}초 뒤 시작`:'운동 시작';
+    this._setText('message',this.phase==='countdown'?'준비 자세를 유지해 주세요.':'시작하면 3초 뒤에 횟수를 셉니다.');
+    $('btn-camera-flip').hidden=false;$('btn-camera-help').hidden=false;
+    $('btn-set-end').hidden=true;$('wo-rest-record').hidden=true;
+    this.el.target.hidden=true;$('wo-progress').hidden=true;this._setText('count','');
+  }
+
+  beginWorkout() {
+    if(this.phase!=='countdown' && this.phase!=='prepare')return;
+    const now=performance.now();
+    this.clock.start(now);this.t0=now;this.wallT0=Date.now();this.session.start=this.wallT0;
+    // 준비 화면의 시각을 제외해 진단 좌표도 운동 시작부터 증가하게 한다.
+    this.diag.start({...this.diag.meta,camera:this.camInfo,delegate:this.landmarker?.delegate});
+    this.tracker=this.plan?this._makeTracker(this._exFor(this.plan.i)):new Tracker({candidates:this.session.candidates,lockReps:store.settings().lockReps,idleSec:this.cfg.setEndSec||null});
+    if(this.appliedUp)this.tracker.setCameraUp(this.appliedUp);
+    this.phase='work';this.el.frame.hidden=true;
+    if(this.pt){this.pt.readyAt=now;this.pt.lastActiveAt=now;}
+    this.voice.beep(990,.15);this.voice.say('시작하세요.',{interrupt:true});this._hud();
+  }
+
+  pause(reason = '') {
+    if(this.phase!=='work' || this.isFile)return;
+    const now=performance.now();this.clock.pause(now);this.pausedAt=now;this.pauseReason=reason;this.phase='paused';this.voice.stop();this._hud();
+  }
+
+  resume() {
+    if(this.phase!=='paused')return;
+    const now=performance.now(), gap=this.clock.resume(now);
+    if(this.restUntil)this.restUntil+=gap;
+    if(this.pt)for(const key of ['lastActiveAt','readyAt','timerStart','workEnd','leadUntil'])if(this.pt[key]!=null)this.pt[key]+=gap;
+    // A half-finished motion must not become a new rep after changing posture while paused.
+    for(const counter of Object.values(this.tracker.counters))counter.reset();
+    this.tracker.valid={};this.tracker.buf=[];
+    this.tracker.smoother=new this.tracker.smoother.constructor(Object.keys(this.tracker.smoother.s),this.tracker.o.smoothTau);
+    if (this.tracker.set?.kind === 'reps') this.tracker.set.lastRepT=this.clock.elapsed(now);
+    this.resumeGrace=now+1500;
+    this.phase='work';this.pauseReason='';this.voice.say('이어서 시작하세요.',{interrupt:true});this._hud();
+  }
+
+  skipRest() {
+    if(!this.restUntil || this.phase!=='work')return;
+    if(this.plan)this._ptEndRest(true);else this.restUntil=0;
+    this.voice.say('다음 세트를 시작하세요.',{interrupt:true});this._hud();
+  }
+
+  completeCurrentSet() {
+    if(this.phase!=='work' || this.restUntil || this.isFile)return;
+    if(this.plan)this._ptComplete({manual:true,partial:true});
+    else {
+      const options={minSetReps:this.tracker.o.minSetReps,holdMin:this.tracker.o.holdMin};
+      Object.assign(this.tracker.o,{minSetReps:1,holdMin:1});
+      for(const e of this.tracker.finish())this._onEvent(e);
+      Object.assign(this.tracker.o,options);
+      for(const c of Object.values(this.tracker.counters))c.reset();
+    }
+    this._hud();
+  }
+
+  editLastSet() {
+    const set=this.session?.sets.at(-1);
+    if(!set || !this.restUntil || this.phase!=='work')return;
+    this.pause();
+    const d=$('dialog');
+    d.innerHTML=`<form method="dialog"><h3>${esc(exName(set.exercise))} 기록 수정</h3><label for="last-reps">${set.kind==='hold'?'버틴 시간(초)':'실제로 한 횟수'}</label><div class="stepper"><button class="mini-btn" type="button" data-last-step="-1" aria-label="줄이기">−</button><input id="last-reps" type="number" inputmode="numeric" min="0" max="9999" value="${set.kind==='hold'?set.holdSec:set.reps}"><button class="mini-btn" type="button" data-last-step="1" aria-label="늘리기">+</button></div><div class="btn-row"><button value="cancel" class="btn btn-ghost">취소</button><button value="ok" class="btn btn-primary">저장</button></div></form>`;
+    d.querySelectorAll('[data-last-step]').forEach(b=>b.onclick=()=>{$('last-reps').value=Math.max(0,Number($('last-reps').value)+Number(b.dataset.lastStep));});
+    d.onclose=()=>{
+      if(d.returnValue==='ok'){
+        const value=Number($('last-reps').value);
+        if(Number.isFinite(value) && value>=0){
+          editRecordedSet(set,{value});
+          const logged=this.plan?.log.at(-1);if(logged && logged.i===set.plan?.item && logged.setNo===set.plan?.setNo){logged.done=Math.round(value);this.session.planProgress=this.plan.progress();}
+          store.upsertSession(this.session);this._renderSets();
+        }
+      }
+      if(this.session)this.resume();
+    };d.showModal();
+  }
+
+  async flipCamera() {
+    if(this.phase!=='prepare' || this.switchingCamera)return;
+    this.switchingCamera=true;this.primary.disabled=true;this.ready=false;this.readySince=null;
+    const switchingSession=this.session;
+    const previousStream=this.stream;
+    try{
+      const st={...store.settings(),cameraId:'',facingMode:this.camInfo?.facing==='environment'?'user':'environment'};
+      // Release the current camera first: many Android devices permit only one active stream.
+      previousStream?.getTracks().forEach(t=>t.stop());
+      await this._openSource(null,st);if(this.session!==switchingSession)return;
+      this.tracker=this.plan?this._makeTracker(this._exFor(this.plan.i)):new Tracker({candidates:this.session.candidates});
+      this.lastVT=null;
+    }catch(e){if(this.session===switchingSession)try{await this._openSource(null,store.settings());}catch(error){if(this.session===switchingSession)this._fail(error);}}
+    finally{this.switchingCamera=false;if(this.session===switchingSession)this._hud();}
+  }
+
+  cameraHelp() {
+    const d=$('dialog');d.innerHTML='<form method="dialog"><h3>촬영 위치</h3><p>휴대폰을 안정적인 곳에 세우고 화면 가운데에 서 주세요. 머리와 발이 함께 보이도록 거리를 조절해 주세요.</p><p>몸이 작게 보이면 조금 가까이, 다리가 잘리면 조금 뒤로 이동해 주세요. 조명은 몸 앞쪽이 좋아요.</p><button value="ok" class="btn btn-primary">확인</button></form>';d.onclose=null;d.showModal();
+  }
+
+  _modernHUD() {
+    const snap=this.tracker.snapshot(), resting=!!this.restUntil && (this.plan?this.pt.stage==='rest':snap.state==='search' && !snap.pending);
+    if (this.phase==='work' && !this.isFile && !resting && !snap.present && ['reps','hold'].includes(snap.state) && performance.now()>(this.resumeGrace||0)) {
+      this.pause('몸이 화면에서 벗어났어요');
+      return;
+    }
+    this.el.screen.dataset.phase=this.phase==='paused'?'paused':resting?'rest':'work';
+    const item=this.plan?.item;
+    const current=snap.exercise || (item && !isTimer(item)?item.exercise:this.session.candidates?.length===1?this.session.candidates[0]:null);
+    $('wo-heading').textContent=this.phase==='paused'?(this.pauseReason||'일시정지'):resting?'휴식':item&&isTimer(item)?item.name:current?exName(current):'자유 운동';
+    $('wo-subheading').textContent=resting?`${this.session.sets.length}세트 완료`:this.plan&&!isTimer(item)?`${this.plan.setNo} / ${item.sets}세트`:current?`${(this.setCount[current]||0)+1}세트`:'동작을 인식해 횟수를 셉니다.';
+    if(this.phase==='paused'){this.el.status.textContent=this.pauseReason?'자리를 잡고 이어서 운동하세요':'기록을 멈췄어요';this.el.framing.hidden=true;}
+    else if(!resting && snap.present && !this.isFile){this.el.status.textContent='인식 중';}
+    // Position advice has one owner; keep the separate cue and repetition count readable.
+    if(!resting && !this.el.framing.hidden)this._setText('message','');
+    this.primary.disabled=false;
+    const progress=$('wo-progress');progress.hidden=!item || isTimer(item) || isTimed(item) || resting;
+    if(!progress.hidden){progress.max=this.plan.target||1;progress.value=Math.min(progress.max,this._ptCount(snap));}
+    this.primary.innerHTML=this.phase==='paused'?`${icon('play')} 이어서 운동`:resting?'다음 세트 시작':`${icon('pause')} 일시정지`;
+    $('btn-set-end').hidden=resting || this.phase==='paused' || this.isFile || !!(item&&isTimer(item));
+    $('btn-camera-flip').hidden=true;$('btn-camera-help').hidden=true;
+    const last=this.session.sets.at(-1);$('wo-rest-record').hidden=!resting || !last;
+    if(resting && last){
+      $('wo-last-name').textContent=`${exName(last.exercise)} · ${last.plan?.setNo||this.setCount[last.exercise]}세트`;
+      $('wo-last-value').textContent=`${last.kind==='hold'?last.holdSec+'초':last.reps+'회'}${last.edited?' · 직접 수정':''}`;
+      $('wo-rest-next').textContent=item?(isTimer(item)?item.name:`${exName(item.exercise)} · ${this.plan.setNo}/${item.sets}세트 · 목표 ${this._targetWords(item)}`):`${exName(last.exercise)} · 다음 세트`;
+      this._setText('message',store.settings().handGesture?'두 손을 2초 들면 휴식이 끝나요.':'준비되면 다음 세트를 시작하세요.');
+    }
+    this.el.plan.hidden=true;
+    if(!this.plan && snap.state==='search' && !resting && !snap.pending)this._setText('count','0');
+    this.el.restActions.hidden=!resting;
+    this.el.camera.hidden=true;
   }
 
   /* ---------- 오늘의 루틴(PT 모드) ---------- */
@@ -363,7 +529,7 @@ export class Workout {
 
   /**
    * 지금 세트를 끝내고 기록 → 다음 세트·운동 준비(휴식).
-   * manual = '세트 완료' 버튼(목표만큼 한 걸로), partial = 목표 전에 멈춤, final = 운동 종료(다음 준비 안 함)
+   * manual = 사용자가 실제 인식 횟수로 종료, partial = 목표 전에 멈춤, final = 운동 종료(다음 준비 안 함)
    */
   _ptComplete({ manual = false, partial = false, final = false } = {}) {
     const pt = this.pt;
@@ -372,7 +538,7 @@ export class Workout {
     const setNo = this.plan.setNo;
     const tgt = this.plan.target;
     const timer = isTimer(item), timed = isTimed(item);
-    const done = timer ? tgt : manual && !timed ? Math.max(pt.accum, tgt) : pt.accum;
+    const done = timer ? tgt : pt.accum;
     if (final && (timer || done <= 0)) return; // 운동을 끝낼 때 시작도 안 한 세트는 남기지 않는다
     if (!timer && (done > 0 || manual)) this._recordPlanSet({ item, setNo, tgt, done, manual, timed, recs: pt.recs });
     const res = this.plan.completeSet(done, { manual });
@@ -433,7 +599,7 @@ export class Workout {
 
   // '다음 운동' 버튼: 하던 세트는 한 만큼 기록하고 남은 세트를 건너뛴다
   _ptSkip() {
-    if (!this.plan || this.plan.finished) return;
+    if (!this.plan || this.plan.finished || this.phase!=='work') return;
     const exBefore = this.plan.i;
     if (this.pt.stage === 'work' && this._ptCount() > 0) this._ptComplete({ final: true });
     if (this.plan.i === exBefore) this.plan.skipExercise();
@@ -463,19 +629,18 @@ export class Workout {
   _recordPlanSet({ item, setNo, tgt, done, manual, timed = false, recs }) {
     const ex = item.exercise;
     const hold = isHold(ex);
-    const nowT = (performance.now() - this.t0) / 1000;
+    const nowT = this.clock.elapsed(performance.now());
     const issues = {};
     for (const r of recs) for (const [k, v] of Object.entries(r.issues || {})) issues[k] = (issues[k] || 0) + v;
     const tempo = recs.flatMap((r) => r.tempo || []);
-    const counted = recs.reduce((a, r) => a + (hold ? 0 : r.reps || 0), 0);
-    const good = hold ? null : Math.min(done, recs.reduce((a, r) => a + (r.good ?? r.reps ?? 0), 0) + Math.max(0, done - counted));
+    const good = hold ? null : recs.reduce((a, r) => a + (r.good ?? 0), 0);
     const startT = recs.length ? recs[0].startT : nowT;
     const endT = recs.length ? recs[recs.length - 1].endT : nowT;
     const rec = {
       id: store.uid(), exercise: ex, kind: hold ? 'hold' : 'reps',
       reps: hold ? null : done, holdSec: hold ? Math.round(done) : null, good, issues,
       weight: item.weight ?? store.lastWeight(ex),
-      start: Math.round(this.wallT0 + startT * 1000), end: Math.round(this.wallT0 + endT * 1000),
+      start: Math.round(this.wallT0 + this.clock.wallOffset(startT)), end: Math.round(this.wallT0 + this.clock.wallOffset(endT)),
       plan: { item: this.plan.i, setNo, target: tgt, manual, ...(timed ? { timed: true } : {}) },
     };
     if (tempo.length) { rec.tempo = tempo; rec.tempoSum = tempoSummary(tempo); }
@@ -487,6 +652,7 @@ export class Workout {
   }
 
   async _openSource(source, st = store.settings()) {
+    const openingSession=this.session;
     const v = this.el.video;
     v.muted = true;
     v.playsInline = true;
@@ -500,8 +666,11 @@ export class Workout {
       if (!window.isSecureContext) throw Object.assign(new Error('insecure'), { name: 'InsecureContext' });
       if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('nocam'), { name: 'NotSupportedError' });
       this.el.loadingText.textContent = '카메라 켜는 중…';
-      this.stream = await openCamera(st);
-      this.camInfo = await widenCamera(this.stream, st.cameraWide);
+      const stream = await openCamera(st);
+      const info = await widenCamera(stream, st.cameraWide);
+      if(this.session!==openingSession){stream.getTracks().forEach(t=>t.stop());throw Object.assign(new Error('카메라 준비 취소'),{name:'AbortError'});}
+      this.stream = stream;
+      this.camInfo = info;
       this.el.camera.textContent = cameraSummary(this.camInfo);
       this.el.camera.hidden = false;
       // 거울 보기는 나를 비추는(전면) 카메라일 때만
@@ -601,7 +770,8 @@ export class Workout {
     }
     const lm = res.landmarks?.[0] || null;
     const wl = res.worldLandmarks?.[0] || null;
-    const t = this.isFile ? mediaTime : (now - this.t0) / 1000;
+    const t = this.isFile ? mediaTime : this.phase === 'prepare' || this.phase === 'countdown' ? (now-this.t0)/1000 : this.clock.elapsed(now);
+    if (this.phase === 'paused') { this.lastLm=lm; this._draw(lm); return; }
     if (!this.isFile) this.diag.add(t, lm, wl);
     const events = this.tracker.update(t, lm, wl);
     this.frames++;
@@ -614,7 +784,7 @@ export class Workout {
     }
     this.lastLm = lm;
     this._draw(lm);
-    for (const e of events) this._onEvent(e);
+    if (this.phase === 'work') for (const e of events) this._onEvent(e);
     this._hud();
   }
 
@@ -669,7 +839,7 @@ export class Workout {
   }
 
   _recordSet(s, quiet) {
-    const toMs = (t) => (this.isFile ? this.session.start : this.wallT0) + t * 1000;
+    const toMs = (t) => this.isFile ? this.session.start+t*1000 : this.wallT0+this.clock.wallOffset(t);
     const rec = {
       id: store.uid(), exercise: s.exercise, kind: s.kind,
       reps: s.reps ?? null, holdSec: s.holdSec ?? null, good: s.good ?? null, issues: s.issues || {},
@@ -702,10 +872,15 @@ export class Workout {
 
   _tick() {
     const now = performance.now();
+    if (this.phase==='prepare' || this.phase==='countdown') {
+      if(this.phase==='countdown' && now>=this.countdownUntil) { if(this.ready) this.beginWorkout(); else this.phase='prepare'; }
+      this._hud();return;
+    }
+    if (this.phase==='paused') { this._hud();return; }
     if (!this.isFile && this.running) this._applyTilt(now);
     if (this.plan && this.running) this._ptTick(now);
     if (this.running && !this.isFile) this._gestureTick(now);
-    const elapsed = this.isFile ? (this.progress || 0) * (this.el.video.duration || 0) : (now - this.t0) / 1000;
+    const elapsed = this.isFile ? (this.progress || 0) * (this.el.video.duration || 0) : this.clock.elapsed(now);
     this._setText('clock', fmtClock(elapsed));
     if (this.restUntil) {
       const left = (this.restUntil - now) / 1000;
@@ -743,6 +918,9 @@ export class Workout {
   }
 
   _hud() {
+    if (!this.tracker) return;
+    if (this.phase==='prepare' || this.phase==='countdown') { this._prepareHUD(); return; }
+    if (this.phase==='paused') { this._modernHUD(); return; }
     const snap = this.tracker.snapshot();
     const now = performance.now();
     const active = snap.state === 'reps' || snap.state === 'hold';
@@ -759,7 +937,7 @@ export class Workout {
       status = snap.raw ? '몸이 덜 보여요' : '사람을 찾는 중';
       message = frame?.text || '전신이 보이게 2~3m 뒤로 가 주세요';
     } else {
-      status = `인식 중 · ${this.fps}fps`;
+      status = '인식 중';
       dot = shown && shown.code !== 'feet' ? 'warn' : 'ok';
       message = frame?.text || '';
     }
@@ -773,6 +951,7 @@ export class Workout {
       this._drawTempo(snap);
       this._liftCenter(); // 시범 그림이 생기고 없어지며 아래 패널 높이가 바뀐다
       if (this.cfg.debug) this._debug(snap);
+      this._modernHUD();
       return;
     }
 
@@ -814,6 +993,7 @@ export class Workout {
     this._drawAdjust();
     this._drawTempo(snap);
     if (this.cfg.debug) this._debug(snap);
+    this._modernHUD();
   }
 
   // 손 제스처: 쉬는 동안 두 손을 머리 위로 쭉 뻗고 2초 → 휴식 끝 (폰을 만지지 않고).
@@ -899,7 +1079,7 @@ export class Workout {
       this._setText('planSets', `전체 ${prog.setsDone}/${prog.setsTotal}세트`);
       this.el.planFill.style.width = '100%';
       this._setText('exercise', '루틴 완료');
-      this._setText('count', '👏');
+      this._setText('count', '완료');
       this._setText('message', '수고했어요!');
       count.classList.remove('rest', 'tentative', 'done');
       this.el.target.hidden = true;
@@ -971,7 +1151,7 @@ export class Workout {
     const tgt = pl.target;
     this._setText('exercise', `${name} · ${pl.setNo}/${it.sets}세트`);
     this._setText('count', `${n}${unit}`);
-    this._setText('target', `/${tgt}${unit}`);
+    this._setText('target', `/${tgt}${unit||'회'}`);
     this.el.target.hidden = false;
     count.classList.remove('rest', 'tentative');
     count.classList.toggle('done', n >= tgt);
@@ -1195,11 +1375,11 @@ export class Workout {
     g.fillStyle = '#000';
     g.fillRect(0, 0, W, H);
     // 세로 화면에서 남는 위아래 공간은 아래로 몰아 큰 숫자·안내가 사람을 가리지 않게(영상은 위쪽 상태 줄 바로 아래)
-    const topInset = (this.plan ? 128 : 60) * dpr;
+    const topInset = H;
     const ox = (W - v.videoWidth * scale) / 2;
     const oy = Math.min((H - v.videoHeight * scale) / 2, topInset);
     g.drawImage(v, ox, oy, v.videoWidth * scale, v.videoHeight * scale);
-    if (!lm) return;
+    if (!lm || !this.cfg.debug) return;
     const X = (p) => ox + p.x * v.videoWidth * scale;
     const Y = (p) => oy + p.y * v.videoHeight * scale;
     const warn = this.cueUntil > 0;
@@ -1252,7 +1432,7 @@ export class Workout {
 
   end() {
     if (!this.session) return;
-    const wasRunning = this.running;
+    const wasRunning = this.running && (this.phase==='work' || this.phase==='paused');
     this.running = false;
     if (this.raf) cancelAnimationFrame(this.raf);
     clearInterval(this.ticker);
@@ -1262,6 +1442,7 @@ export class Workout {
     this.voice.stop();
     if (this.session.sets.length) {
       this.session.end = Date.now();
+      if (!this.isFile) this.session.activeSec = Math.round(this.clock.elapsed(performance.now()));
       if (this.isFile) {
         const last = this.session.sets[this.session.sets.length - 1];
         this.session.end = last.end;
@@ -1298,6 +1479,8 @@ export class Workout {
     this.el.screen.hidden = true;
     this.el.loading.querySelector('.spinner').hidden = false;
     document.body.classList.remove('in-workout');
+    document.querySelectorAll('.screen.page').forEach(page=>page.inert=false);
     this.session = null;
+    this.phase = 'closed';
   }
 }

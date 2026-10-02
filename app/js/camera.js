@@ -12,7 +12,7 @@ const isWideLabel = (label = '') => /wide|광각|ultra/i.test(label);
 /** 설정대로 카메라를 연다. 고른 카메라가 없어졌으면(다른 폰·초기화) 전면 기본으로 */
 export async function openCamera(st) {
   const size = st.cameraWide ? SIZE.wide : SIZE.normal;
-  const defaults = { facingMode: 'user', ...size, frameRate: { ideal: 30 } };
+  const defaults = { facingMode: st.facingMode || 'user', ...size, frameRate: { ideal: 30 } };
   const want = st.cameraId ? { deviceId: { exact: st.cameraId }, ...size, frameRate: { ideal: 30 } } : defaults;
   const open = (video) => navigator.mediaDevices.getUserMedia({ video, audio: false });
   let stream;
@@ -24,7 +24,7 @@ export async function openCamera(st) {
     } else throw e;
   }
   // 직접 고른 카메라는 존중한다. 자동 모드에서는 권한을 받은 뒤 이름이 확인된 전면 광각만 고른다.
-  if (!st.cameraWide || st.cameraId) return stream;
+  if (!st.cameraWide || st.cameraId || st.facingMode === 'environment') return stream;
   const track = stream.getVideoTracks()[0];
   if (isWideLabel(track?.label)) return stream;
   let devices;

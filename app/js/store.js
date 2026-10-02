@@ -25,7 +25,7 @@ export const DEFAULT_SETTINGS = {
 };
 
 const blank = () => ({
-  sessions: [], settings: { ...DEFAULT_SETTINGS }, weights: {}, lastPick: [],
+  sessions: [], settings: { ...DEFAULT_SETTINGS }, weights: {}, lastPick: [], favoriteExercises: [],
   routineDraft: null,  // 지금 짜 둔 오늘 루틴 { name, focus, equipment, level, reason, items, seedN }
   routinePrefs: { focus: 'auto', equipment: 'body', minutes: 30, level: 1 },
   routines: [],        // 저장한 내 루틴 [{ id, name, items, savedAt }]
@@ -113,6 +113,12 @@ export function setLastPick(ids) {
   persist();
 }
 
+export const favoriteExercises = () => state.favoriteExercises || [];
+export function toggleFavoriteExercise(id) {
+  state.favoriteExercises = favoriteExercises().includes(id) ? favoriteExercises().filter(x=>x!==id) : [...favoriteExercises(),id];
+  persist();
+}
+
 export function exportJSON() {
   return JSON.stringify({ app: 'handsfree-pt', version: 1, exportedAt: new Date().toISOString(), ...state }, null, 2);
 }
@@ -128,6 +134,7 @@ export function importJSON(text) {
     added++;
   }
   state.sessions.sort((a, b) => b.start - a.start);
+  if(Array.isArray(data.favoriteExercises)) state.favoriteExercises=[...new Set([...favoriteExercises(),...data.favoriteExercises.filter(x=>typeof x==='string')])];
   if (data.weights) state.weights = { ...data.weights, ...state.weights };
   if (Array.isArray(data.routines)) {
     const have = new Set(routines().map((r) => r.id));

@@ -2,6 +2,7 @@
 
 import { EXERCISE_BY_ID } from './engine/exercises.js';
 import * as store from './store.js';
+import { icon } from './icons.js';
 import { esc, exName, sessionTotals, sessionItem, minutes } from './format.js';
 import { personalRecords, weeklyGroups, sessionCalories, e1rm } from './stats.js';
 
@@ -24,12 +25,13 @@ const load = (sets) => sets.reduce((a, s) => a + (s.kind === 'hold' ? (s.holdSec
 
 export function renderHistory(el) {
   root = el;
+  const insightsOpen = !!el.querySelector('.history-insights')?.open;
   const sessions = store.sessions();
   if (!sessions.length) {
     el.innerHTML = '<div class="empty">아직 기록이 없어요.<br>운동을 하면 여기에 날짜별로 정리돼요.</div>';
     return;
   }
-  el.innerHTML = weekCard(sessions) + groupCard(sessions) + calendarCard(sessions) + chartCard(sessions) + prCard(sessions) + listHtml(sessions);
+  el.innerHTML = listHtml(sessions) + `<details class="history-insights" ${insightsOpen?'open':''}><summary>통계 · 달력 ${icon('caret-right')}</summary>${weekCard(sessions)+groupCard(sessions)+calendarCard(sessions)+chartCard(sessions)+prCard(sessions)}</details>`;
 }
 
 function weekCard(sessions) {
@@ -47,7 +49,7 @@ function weekCard(sessions) {
   const stat = (v, u, l) => `<div class="stat"><div class="num">${v}${u ? `<small style="font-size:13px"> ${u}</small>` : ''}</div><div class="lbl">${l}</div></div>`;
   return `<div class="card" style="margin-bottom:12px"><div style="font-weight:800;margin-bottom:6px">이번 주</div>
     <div class="today-card" style="margin:0;grid-template-columns:repeat(4,1fr)">${stat(days, '일', '운동한 날')}${stat(reps, '회', '총 반복')}${stat(min, '분', '운동 시간')}${stat(kcal, '', 'kcal(어림)')}</div>
-    ${streak >= 2 ? `<div class="muted small" style="margin-top:8px">🔥 ${streak}일 연속 운동 중</div>` : ''}</div>`;
+    ${streak >= 2 ? `<div class="muted small" style="margin-top:8px">${streak}일 연속 운동 중</div>` : ''}</div>`;
 }
 
 // 이번 주 부위별 세트 — 한쪽만 하고 있지 않은지 (일반적인 권장: 큰 부위 주 10세트 안팎)
@@ -76,7 +78,7 @@ function prCard(sessions) {
   const pr = personalRecords(sessions);
   const rows = Object.entries(pr).filter(([, p]) => p.maxWeight || p.maxReps?.reps || p.maxHold);
   if (!rows.length) return '';
-  return `<div class="card pr-card" style="margin-bottom:12px"><div style="font-weight:800;margin-bottom:6px">🏆 최고 기록</div>
+  return `<div class="card pr-card" style="margin-bottom:12px"><div style="font-weight:800;margin-bottom:6px">최고 기록</div>
     ${rows.map(([ex, p]) => {
       const { main, sub } = prParts(p);
       return `<div class="pr-row"><span>${esc(exName(ex))}</span><span class="pr-val"><b>${main}</b><span class="muted small">${sub}</span></span></div>`;

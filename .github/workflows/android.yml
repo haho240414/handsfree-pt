@@ -35,6 +35,7 @@ jobs:
       - name: 웹 앱 → 안드로이드 프로젝트로 복사
         run: |
           npm ci
+          npm test
           npx cap sync android
       - name: 서명 키 준비
         env:

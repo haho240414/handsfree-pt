@@ -93,11 +93,12 @@ const cams = await stage('카메라 목록', `(async () => {
 const cam = await stage('카메라 운동 화면', `(async () => {
   window.__hfpt.store.setSetting('gpu', false);
   document.getElementById('btn-start-auto').click();
+  document.getElementById('btn-home-start').click();
   const w = window.__hfpt.workout;
   let s;
   for (let i = 0; i < 24; i++) {
     await new Promise((r) => setTimeout(r, 2500));
-    s = { running: w.running, fps: w.fps, delegate: w.landmarker?.delegate ?? null,
+    s = { phase: w.phase, activeSeconds: w.clock.elapsed(performance.now()), running: w.running, fps: w.fps, delegate: w.landmarker?.delegate ?? null,
       loading: document.getElementById('wo-loading').hidden ? null : document.getElementById('wo-loading-text').innerText,
       status: document.getElementById('wo-status-text').innerText,
       video: [document.getElementById('cam').videoWidth, document.getElementById('cam').videoHeight],
@@ -121,7 +122,8 @@ if (cam?.running) {
     const w = (ms) => new Promise((r) => setTimeout(r, ms));
     window.__hfpt.store.setSetting('gpu', false);
     document.querySelector('[data-go=home]').click(); await w(300);
-    document.getElementById('btn-open-routine').click(); await w(500);
+    document.getElementById('btn-open-routine').click();
+    document.getElementById('btn-home-start').click(); await w(500);
     const items = document.querySelectorAll('.r-item').length;
     document.getElementById('btn-start-routine').click();
     let s;
@@ -130,7 +132,8 @@ if (cam?.running) {
       s = { items, plan: document.getElementById('wo-plan-step').innerText, sets: document.getElementById('wo-plan-sets').innerText,
         exercise: document.getElementById('wo-exercise').innerText, count: document.getElementById('wo-count').innerText,
         target: document.getElementById('wo-target').innerText, next: document.getElementById('wo-next-text').innerText };
-      if (s.target) break;
+      if (window.__hfpt.workout.running && window.__hfpt.workout.phase==='prepare') { window.__hfpt.workout.beginWorkout(); }
+      if (s.target || s.count) break;
     }
     window.__hfpt.workout.end(); window.__hfpt.store.setSetting('gpu', true);
     return s;

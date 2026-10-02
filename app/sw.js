@@ -1,12 +1,33 @@
 // 오프라인 동작용 서비스 워커: 앱 화면은 최신 우선(네트워크 → 실패 시 캐시),
 // 용량 큰 AI 모델·엔진 파일은 캐시 우선(한 번 받으면 다시 안 받음).
-const VERSION = 'hfpt-v11';
+const VERSION = 'hfpt-v12';
 const SHELL = [
-  './', './index.html', './css/app.css', './manifest.webmanifest',
+  './', './index.html', './css/app.css', './css/redesign.css', './fonts/PretendardVariable.woff2', './manifest.webmanifest',
   './js/main.js', './js/workout.js', './js/history.js', './js/format.js', './js/store.js', './js/voice.js', './js/pose.js',
-  './js/tilt.js', './js/diag.js', './js/native.js', './js/camera.js', './js/framing.js', './js/routine.js', './js/stats.js', './js/health.js', './privacy.html', './js/demo.js', './data/demos.json',
+  './js/tilt.js', './js/diag.js', './js/native.js', './js/camera.js', './js/framing.js', './js/session-edit.js', './js/session-clock.js', './js/icons.js', './js/routine.js', './js/stats.js', './js/health.js', './privacy.html', './js/demo.js', './data/demos.json',
   './js/engine/features.js', './js/engine/filters.js', './js/engine/counter.js', './js/engine/exercises.js', './js/engine/tracker.js',
   './js/engine/tempo.js',
+  './icons/ui/arrow-left.svg',
+  './icons/ui/arrow-right.svg',
+  './icons/ui/arrows-clockwise.svg',
+  './icons/ui/barbell.svg',
+  './icons/ui/camera-rotate.svg',
+  './icons/ui/camera.svg',
+  './icons/ui/caret-right.svg',
+  './icons/ui/chart-bar.svg',
+  './icons/ui/check.svg',
+  './icons/ui/gear.svg',
+  './icons/ui/house.svg',
+  './icons/ui/list-bullets.svg',
+  './icons/ui/minus.svg',
+  './icons/ui/pause.svg',
+  './icons/ui/pencil-simple.svg',
+  './icons/ui/person-simple.svg',
+  './icons/ui/play.svg',
+  './icons/ui/plus.svg',
+  './icons/ui/speaker-high.svg',
+  './icons/ui/speaker-slash.svg',
+  './icons/ui/trash.svg',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
 ];
 

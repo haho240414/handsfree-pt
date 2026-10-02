@@ -107,3 +107,11 @@ test('카메라 목록 검사 중 예외가 나도 열린 카메라를 닫는다
   assert.equal(permission.track.stopped, true);
   assert.equal(probe.track.stopped, true);
 });
+
+test('후면 전환 요청을 존중하고 전면 광각으로 다시 바꾸지 않는다', async (t) => {
+  const rear = stream('rear', {facingMode:'environment'});let request;
+  media(t,{getUserMedia:async r=>{request=r;return rear;},enumerateDevices:async()=>{throw Error('후면 요청에는 전면 목록 검사 불필요');}});
+  assert.equal(await openCamera({cameraWide:true,facingMode:'environment'}),rear);
+  assert.equal(request.video.facingMode,'environment');
+  assert.equal(request.video.resizeMode,'none');
+});
