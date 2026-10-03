@@ -152,6 +152,14 @@ export function computeFeatures(lm, wl) {
     angle3(wl[L.L_HIP], wl[L.L_KNEE], wl[L.L_ANKLE]), minVis(lm, L.L_HIP, L.L_KNEE, L.L_ANKLE),
     angle3(wl[L.R_HIP], wl[L.R_KNEE], wl[L.R_ANKLE]), minVis(lm, L.R_HIP, L.R_KNEE, L.R_ANKLE));
   f.knee = knee.avg; f.kneeMin = knee.min; f.kneeL = knee.L; f.kneeR = knee.R;
+  const observedKnees = [
+    observedVis(lm[L.L_KNEE]) >= VIS_MIN && observedVis(lm[L.L_ANKLE]) >= VIS_MIN ? knee.L : NaN,
+    observedVis(lm[L.R_KNEE]) >= VIS_MIN && observedVis(lm[L.R_ANKLE]) >= VIS_MIN ? knee.R : NaN,
+  ].filter(Number.isFinite);
+  f.observedKnee = observedKnees.length ? observedKnees.reduce((a,b)=>a+b,0) / observedKnees.length : NaN;
+  // 앉아 다리 벌리기: 두 무릎의 실제 3D 간격. 화면 밖/가려진 무릎 추정값은 사용하지 않는다.
+  f.kneeSpread = [L.L_HIP,L.R_HIP,L.L_KNEE,L.R_KNEE].every(i=>observedVis(lm[i]) >= VIS_MIN)
+    ? Math.hypot(wl[25].x-wl[26].x,wl[25].y-wl[26].y,wl[25].z-wl[26].z) : NaN;
 
   const hip = sided(
     angle3(wl[L.L_SHOULDER], wl[L.L_HIP], wl[L.L_KNEE]), minVis(lm, L.L_SHOULDER, L.L_HIP, L.L_KNEE),
@@ -215,6 +223,8 @@ export function computeFeatures(lm, wl) {
     ? Math.hypot(wl[a].x - wl[b].x, wl[a].y - wl[b].y, wl[a].z - wl[b].z) : NaN;
   f.wristOppShoulderL = distance(L.L_WRIST, L.R_SHOULDER);
   f.wristOppShoulderR = distance(L.R_WRIST, L.L_SHOULDER);
+  f.faceReachL = observedVis(lm[L.NOSE]) >= VIS_MIN ? distance(L.L_WRIST, L.NOSE) : NaN;
+  f.faceReachR = observedVis(lm[L.NOSE]) >= VIS_MIN ? distance(L.R_WRIST, L.NOSE) : NaN;
   f.noseDrop = vis(lm[L.NOSE]) >= VIS_MIN && torsoVis >= VIS_MIN ? wl[L.NOSE].y - shMidY : NaN;
 
   // 무릎 높이 차(m): 스쿼트는 두 무릎 높이가 같고, 런지는 뒷무릎이 바닥 가까이 내려간다
@@ -281,6 +291,7 @@ export function computeFeatures(lm, wl) {
   f.seen = { head: seen(0), hands: seen(15, 16), knees: seen(25, 26), feet: seen(27, 28) };
   f.seen.arms = [ [11, 13, 15], [12, 14, 16] ].some((ids) => ids.every((i) => observedVis(lm[i]) >= VIS_MIN));
   f.seen.bothArms = [ [11, 13, 15], [12, 14, 16] ].every((ids) => ids.every((i) => observedVis(lm[i]) >= VIS_MIN));
+  f.seen.bothKnees = [25,26].every(i=>observedVis(lm[i]) >= VIS_MIN);
   f.upperCutoff = [0, 11, 12, 13, 14, 15, 16, 23, 24].some((i) => vis(lm[i]) >= VIS_MIN
     && (lm[i].x < edge || lm[i].x > 1-edge || lm[i].y < edge || lm[i].y > 1-edge));
 
@@ -294,6 +305,12 @@ export function computeFeatures(lm, wl) {
   // 발 간격을 '몸 기준'으로: 골반 좌우 방향(stanceW, 사이드 런지·와이드 스쿼트)과 앞뒤 방향(stanceD, 런지·스플릿 스쿼트)
   const hAx = norm([hL.x - hR.x, 0, hL.z - hR.z]);
   const hipVis = minVis(lm, L.L_HIP, L.R_HIP);
+  for (const [side,s,w] of [['L',11,15],['R',12,16]]) {
+    f[`lateralReach${side}`] = hAx && hipVis >= VIS_MIN && minVis(lm,s,w) >= VIS_MIN
+      ? Math.abs(dot([wl[w].x-wl[s].x,0,wl[w].z-wl[s].z],hAx)) : NaN;
+    f[`forwardReach${side}`] = hAx && hipVis >= VIS_MIN && minVis(lm,s,w) >= VIS_MIN
+      ? Math.abs(dot([wl[w].x-wl[s].x,0,wl[w].z-wl[s].z],[-hAx[2],0,hAx[0]])) : NaN;
+  }
   if (hAx && hipVis >= 0.3 && ankleVisBoth >= 0.3) {
     const A = [wl[L.L_ANKLE].x - wl[L.R_ANKLE].x, 0, wl[L.L_ANKLE].z - wl[L.R_ANKLE].z];
     f.stanceW = Math.abs(dot(A, hAx));
@@ -345,6 +362,9 @@ export const SMOOTH_KEYS = [
   'hipMax', 'kneeMax', 'kneeAsym', 'stanceW', 'stanceD', 'ankleYDiff', 'wristDist', 'reach', 'handSide', 'shRoll', 'chestUp',
   'armMin', 'armL', 'armR', 'wristHL', 'wristHR', 'shoulderH', 'elbowKneeL', 'elbowKneeR',
   'hipL', 'hipR', 'observedHip', 'wristOppShoulderL', 'wristOppShoulderR',
+  'observedKnee', 'kneeSpread', 'faceReachL', 'faceReachR',
+  'lateralReachL', 'lateralReachR',
+  'forwardReachL', 'forwardReachR',
 ];
 
 /** 한쪽 팔의 신호·판정이 반대편 쉬는 팔과 섞이지 않게 한다. 몸통·두 손 간격은 그대로. */
@@ -354,5 +374,6 @@ export function armFeatures(f, side) {
     wristH, wristHMax: wristH, shoulderOverWrist: -wristH, elbowKnee: f[`elbowKnee${side}`],
     sideHip: f[`hip${side}`], oppositeArm: f[`arm${side === 'L' ? 'R' : 'L'}`],
     oppositeElbow: f[`elbow${side === 'L' ? 'R' : 'L'}`],
-    wristOppShoulder: f[`wristOppShoulder${side}`] };
+    wristOppShoulder: f[`wristOppShoulder${side}`], faceReach: f[`faceReach${side}`],
+    lateralReach: f[`lateralReach${side}`], forwardReach: f[`forwardReach${side}`] };
 }

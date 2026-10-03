@@ -28,6 +28,11 @@ const PICK = {
   birddog: ['birddog_lyndhurst'], deadbug: ['deadbug_strengthlog'], shouldertap: ['shouldertap_strengthlog'],
   pikepushup: ['pikepushup_strengthlog'], kneepushup: ['kneepushup_strengthlog'], inclinepushup: ['inclinepushup_strengthlog'],
   reverselunge: ['reverselunge_strengthlog'], chairsquat: ['chairsquat_strengthlog'],
+  inclinedbpress: ['inclinedb_strengthlog'], barbellcurl: ['barbellcurl_strengthlog'],
+  onearmrow: ['onearmrow_strengthlog'], cablelateral: ['cablelateral_strengthlog'],
+  ropepushdown: ['ropepushdown_strengthlog'], hipthrust: ['hipthrust_strengthlog'],
+  seatedlegcurl: ['seatedlegcurl_strengthlog'], facepull: ['facepull_strengthlog'],
+  hipabduction: ['hipabduction_strengthlog'], chestpress: ['chestpress_puregym', [32,37.6]],
 };
 // 영상이 없는 운동: 비슷한 자세를 빌려 정지 화면으로
 const STILL = { plank: ['pushup_isolated_side', 'top'] };

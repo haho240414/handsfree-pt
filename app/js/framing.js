@@ -2,9 +2,10 @@
 export function exerciseFraming(ex) {
   const upperBody = !!ex && ex.framing !== 'full' && ['팔', '등', '가슴·어깨'].includes(ex.group);
   return { upperBody, requireArms: upperBody || !!ex?.requireArms,
-    bothArms: !!ex && (ex.bothArms === true || ['fly', 'reversefly'].includes(ex.id)) };
+    bothArms: !!ex && (ex.bothArms === true || ['fly', 'reversefly'].includes(ex.id)),
+    bothKnees: !!ex?.bothKnees, requireFeet: !!ex?.requireFeet };
 }
-export function framingIssue(snap, { upperBody = false, bothArms = false, requireArms = upperBody } = {}) {
+export function framingIssue(snap, { upperBody = false, bothArms = false, requireArms = upperBody, bothKnees = false, requireFeet = false } = {}) {
   const raw = snap.raw;
   if (!raw) return { code: 'missing', text: `몸이 안 보여요. ${upperBody ? '상체와 팔' : '전신'}이 화면에 들어오게 폰을 조정하고 조명을 밝혀 주세요`, speak: true };
   const s = raw.seen || {};
@@ -14,6 +15,8 @@ export function framingIssue(snap, { upperBody = false, bothArms = false, requir
   }
   if (requireArms && (!s.arms || (bothArms && !s.bothArms))) return { code: 'hands', text: `${bothArms ? '양팔' : '움직이는 팔'}의 어깨·팔꿈치·손목이 모두 보이게 폰을 조정해 주세요`, speak: true };
   if (!upperBody && !s.knees) return { code: 'knees', text: '무릎이 안 보여요. 뒤로 가거나 폰을 낮추고, 다리가 가려지지 않게 해 주세요', speak: true };
+  if (bothKnees && !s.bothKnees) return { code: 'knees', text: '양 무릎이 모두 보이게 폰을 조정해 주세요. 기구 패드에 가리지 않는 각도를 찾아 주세요', speak: true };
+  if (requireFeet && !s.feet) return { code: 'ankles', text: '발목이 안 보여요. 기구에 가리지 않게 폰을 낮추거나 옆으로 옮겨 주세요', speak: true };
   if (!s.head) return { code: 'head', text: '머리가 안 보여요. 머리까지 화면에 들어오게 폰을 조정해 주세요', speak: true };
   if (upperBody ? raw.upperCutoff : raw.cutoff) return { code: 'edge', text: '몸 일부가 화면 밖이에요. 화면 가운데로 와 주세요', speak: false };
   if (!upperBody && !s.feet) return { code: 'feet', text: '발까지 보이면 하체 운동을 더 잘 세요', speak: false };

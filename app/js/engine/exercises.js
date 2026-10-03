@@ -868,6 +868,113 @@ EXERCISES.push(
   },
 );
 
+// 자주 기록하는 헬스장 운동. 도구·그립은 포즈로 단정하지 않고 직접 고른 이름을 사용한다.
+EXERCISES.push(
+  variant('bench', { id: 'inclinedbpress', name: '인클라인 덤벨 프레스', aliases: ['인클라인 벤치 프레스', 'incline dumbbell press'],
+    tip: '기울인 벤치 옆·대각선에서 팔과 몸통이 보이게', leadIn: true,
+    check: (w) => [
+      ['등을 기대고 누움', between(M(w, 'torsoTilt'), 30, 110) === true && M(w, 'chestUp') > 0.3, 'core'],
+      ['팔을 위로 밀어올림', gt(P(w, 'wristH', 90), 0.3), 'core'],
+      ['팔꿈치를 굽혔다 폄', gt(RS(w, 'elbowL', 'elbowR'), 30), 'core'],
+      ['몸통은 고정', lt(R(w, 'torsoTilt'), 25), 'soft'],
+    ] }),
+  variant('curl', { id: 'barbellcurl', name: '바벨 컬', aliases: ['바벨 이두 컬', 'EZ바 컬', 'barbell curl'],
+    tip: '정면·대각선에서 바를 잡은 양팔 전체가 보이게' }),
+  variant('row', { id: 'onearmrow', name: '원암 덤벨 로우', aliases: ['한팔 덤벨 로우', '덤벨 로우', 'one arm dumbbell row'],
+    contextBefore: 0.6,
+    tip: '움직이는 팔을 카메라 쪽으로. 벤치에 반대 손을 짚고 당겼다 풀어요',
+    check: (w) => [
+      ['상체를 숙임', between(M(w, 'torsoTilt'), 35, 105), 'core'],
+      // 벤치 지지 시범의 포즈 추정은 상체 기울기 범위가 약 30°다.
+      ['상체는 대체로 고정', lt(R(w, 'torsoTilt'), 40), 'core'],
+      ['위팔을 뒤로 당김', R(w, 'arm') > 25, 'core'],
+      ['팔꿈치를 굽혔다 폄', R(w, 'elbow') > 35 && P(w, 'elbow', 10) < 120, 'core'],
+    ] }),
+  variant('lateral', { id: 'cablelateral', name: '케이블 레터럴 레이즈', aliases: ['케이블 사이드 레이즈', '케이블 사레레', 'cable lateral raise'], sided: true,
+    tip: '정면·대각선에서 움직이는 팔 끝까지 보이게. 한쪽마다 1회',
+    check: (w, b) => [
+      ['상체를 세움', lt(M(w, 'torsoTilt'), 35), 'core'],
+      ['팔을 내린 상태에서 시작', lt(P(w, 'wristH', 10), -0.3), 'core'],
+      ['팔을 들어올림', R(w, 'arm') > 35 && P(w, 'elbow', 10) > 110, 'core'],
+      ['팔을 몸 옆으로 벌림(프론트 레이즈 아님)', M(b, 'lateralReach') > 0.25 && M(b, 'lateralReach') > M(b, 'forwardReach'), 'core'],
+      ['다리는 고정', legsStill(w), 'soft'],
+    ],
+    // 한 손은 기구를 잡고 있으므로 기존 양손 간격 규칙은 사용하지 않는다.
+    form: (w) => [['low', P(w, 'wristH', 90) < -0.2, '어깨 높이까지', '움직이는 팔을 어깨 높이 부근까지 들어올려 보세요']] }),
+  variant('pushdown', { id: 'ropepushdown', name: '로프 트라이셉 푸시다운', aliases: ['로프 푸시다운', '로프 프레스다운', 'rope triceps pushdown'], sided: true,
+    tip: '옆·대각선에서 어깨·팔꿈치·손목이 보이게. 양팔 함께 1회',
+    check: (w) => [
+      ['상체를 세움', lt(M(w, 'torsoTilt'), 45), 'core'],
+      ['위팔은 몸통 옆', lt(P(w, 'arm', 10), 40), 'core'],
+      ['팔꿈치를 굽혔다 폄', R(w, 'elbow') > 35 && P(w, 'elbow', 10) < 125 && P(w, 'elbow', 90) > 140, 'core'],
+      ['손을 아래로 밀어 내림', P(w, 'wristH', 10) < -0.3, 'core'],
+      ['위팔은 대체로 고정', lt(R(w, 'arm'), 35), 'soft'],
+    ] }),
+  variant('bridge', { id: 'hipthrust', name: '힙 쓰러스트', group: '하체', aliases: ['바벨 힙쓰러스트', '힙쓰러스트', 'hip thrust'],
+    tip: '벤치 옆에서 어깨·엉덩이·무릎이 보이게. 엉덩이를 올렸다 내려요',
+    signal: (f) => -f.observedHip,
+    check: (w) => [
+      ['등을 기대고 엉덩이를 폄', M(w, 'chestUp') > 0.25 && P(w, 'torsoTilt', 90) > 40, 'core'],
+      ['엉덩이를 폈다 접음', R(w, 'observedHip') > 25 && P(w, 'observedHip', 90) > 140, 'core'],
+      ['무릎은 굽힌 채', M(w, 'knee') < 140, 'core'],
+    ], form: undefined }),
+  {
+    id: 'seatedlegcurl', name: '시티드 레그 컬', aliases: ['시티드 레그컬', '앉아서 레그 컬', 'seated leg curl'],
+    group: '하체', unit: '회', kind: 'reps', priority: 5, verified: false, auto: false,
+    // 무릎 굽힘/폄의 포즈만으로 저항 방향을 알 수 없으므로 레그 익스텐션과 동시에 추측하지 않는다.
+    family: 'legext', requireFeet: true,
+    tip: '양다리를 함께 움직여요. 기구 옆·대각선에서 무릎·발목이 보이게',
+    signal: (f) => f.observedKnee, prom: 35, minDur: 0.5, maxDur: 8,
+    tempo: { first: 'con', con: '굽히기', ecc: '풀기' },
+    check: (w) => [
+      ['앉은 자세', M(w, 'observedHip') > 55 && M(w, 'observedHip') < 135 && M(w, 'torsoTilt') < 40, 'core'],
+      ['무릎을 굽혔다 폄', R(w, 'observedKnee') > 40 && P(w, 'observedKnee', 10) < 105, 'core'],
+      ['엉덩이는 고정', lt(R(w, 'observedHip'), 30), 'soft'],
+    ],
+  },
+  {
+    id: 'facepull', name: '페이스 풀', aliases: ['페이스풀', '케이블 페이스 풀', 'face pull'],
+    group: '등', unit: '회', kind: 'reps', priority: 5, verified: false, auto: false, sided: true,
+    tip: '앞 대각선에서 얼굴과 움직이는 팔이 보이게. 얼굴 쪽으로 당겼다 풀어요',
+    // 손목-얼굴 거리만으로 세면 로프를 벌리는 중간 구간이 두 반복으로 나뉠 수 있다.
+    signal: (f) => f.elbow, prom: 30, minDur: 0.5, maxDur: 8,
+    tempo: { first: 'con', con: '당기기', ecc: '풀기', dist: (f) => f.faceReach },
+    check: (w, b) => [
+      ['상체를 세움', lt(M(w, 'torsoTilt'), 40), 'core'],
+      ['팔을 얼굴 높이로 듦', P(w, 'wristH', 10) > -0.15 && P(w, 'arm', 90) > 65, 'core'],
+      ['팔꿈치를 굽혀 얼굴로 당김', R(w, 'elbow') > 30 && P(w, 'elbow', 10) < 135 && M(b, 'faceReach') < 0.5, 'core'],
+      ['당긴 손이 높은 위치(위로 미는 프레스 아님)', M(b, 'wristH') > (P(w, 'wristH', 10) + P(w, 'wristH', 90)) / 2, 'core'],
+    ],
+  },
+  {
+    id: 'hipabduction', name: '힙 어브덕션', aliases: ['힙 어브덕션 머신', '아웃타이', '힙 벌리기', 'hip abduction'],
+    group: '하체', unit: '회', kind: 'reps', priority: 5, verified: false, auto: false, bothKnees: true, requireFeet: true,
+    tip: '정면·앞 대각선에서 양 무릎·발목이 보이게. 벌렸다 모으면 1회',
+    signal: (f) => -f.kneeSpread, prom: 0.12, minDur: 0.5, maxDur: 8,
+    tempo: { first: 'con', con: '벌리기', ecc: '모으기', dist: (f) => f.kneeSpread },
+    check: (w) => [
+      ['앉은 자세', M(w, 'observedHip') > 55 && M(w, 'observedHip') < 140 && M(w, 'torsoTilt') < 45, 'core'],
+      ['두 무릎을 벌렸다 모음', R(w, 'kneeSpread') > 0.15, 'core'],
+      ['무릎은 굽힌 채', M(w, 'observedKnee') < 140, 'core'],
+      ['앉은 높이는 유지(스쿼트 아님)', R(w, 'observedHip') < 25 && R(w, 'torsoTilt') < 15, 'core'],
+    ],
+  },
+  {
+    id: 'chestpress', name: '머신 체스트 프레스', aliases: ['체스트 프레스 머신', '가슴 프레스', 'machine chest press'],
+    group: '가슴·어깨', unit: '회', kind: 'reps', priority: 5, verified: false, auto: false, sided: true,
+    // 팔을 앞뒤로 움직이는 포즈만으로 기구의 저항 방향(밀기/당기기)을 단정할 수 없다.
+    family: 'seatedrow',
+    tip: '기구 옆·대각선에서 어깨·팔꿈치·손목이 보이게. 가슴 앞에서 밀었다 돌아와요',
+    signal: (f) => -f.elbow, prom: 30, minDur: 0.5, maxDur: 8,
+    tempo: { first: 'con', con: '밀기', ecc: '돌아오기' },
+    check: (w) => [
+      ['상체를 세우거나 약간 기댐', lt(M(w, 'torsoTilt'), 45), 'core'],
+      ['가슴 앞에서 밀기', P(w, 'wristH', 10) > -0.25 && P(w, 'wristH', 90) < 0.2 && P(w, 'arm', 90) > 45, 'core'],
+      ['팔꿈치를 굽혔다 폄', R(w, 'elbow') > 35 && P(w, 'elbow', 10) < 125 && P(w, 'elbow', 90) > 140, 'core'],
+    ],
+  },
+);
+
 export const EXERCISE_BY_ID = Object.fromEntries(EXERCISES.map((e) => [e.id, e]));
 
 export const exerciseFamily = (id) => EXERCISE_BY_ID[id]?.family || id;

@@ -19,6 +19,8 @@ export const HC_SEGMENT = {
   jumpingjack: 27, climber: 37, burpee: 9, kbswing: 29,
   gobletsquat: 51, dumbbellrdl: 11, dumbbellbench: 5, hammercurl: 1, concentrationcurl: 1, kickback: 12,
   chairsquat: 51, reverselunge: 36,
+  inclinedbpress: 5, barbellcurl: 1, onearmrow: 17, cablelateral: 30, ropepushdown: 12,
+  hipthrust: 25, seatedlegcurl: 32,
 };
 
 const setText = (set) => (set.kind === 'hold' ? `${set.holdSec || 0}초`

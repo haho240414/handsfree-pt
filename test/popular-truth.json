@@ -1,0 +1,15 @@
+{
+  "_note":"원본 장면을 먼저 보고 정답을 정했다. GIF는 실제 한 주기만 추출했으며 1회 자료만 minSetReps=1로 평가한다. 소수 개발 자료의 직접 선택 평가이며 실기 정확도를 뜻하지 않는다. StrengthLog의 machine chest press GIF는 머리 위로 밀어 올리는 동작이라 체스트 프레스 정답 자료에서 제외하고 음성 사례로 남겼다.",
+  "inclinedb_strengthlog":{"exercise":"inclinedbpress","reps":1,"minSetReps":1,"split":"dev","view":"정면 대각선·GIF 1주기"},
+  "barbellcurl_strengthlog":{"exercise":"barbellcurl","reps":1,"minSetReps":1,"split":"dev","view":"정면·GIF 1주기"},
+  "onearmrow_strengthlog":{"exercise":"onearmrow","reps":1,"minSetReps":1,"split":"dev","view":"정면 대각선·한 팔·GIF 1주기"},
+  "cablelateral_strengthlog":{"exercise":"cablelateral","reps":1,"minSetReps":1,"split":"dev","view":"정면·한 팔·GIF 1주기"},
+  "ropepushdown_strengthlog":{"exercise":"ropepushdown","reps":1,"minSetReps":1,"split":"dev","view":"옆 대각선·GIF 1주기"},
+  "hipthrust_strengthlog":{"exercise":"hipthrust","reps":1,"minSetReps":1,"split":"dev","view":"정면 대각선·GIF 1주기"},
+  "seatedlegcurl_strengthlog":{"exercise":"seatedlegcurl","reps":1,"minSetReps":1,"split":"dev","view":"정면 대각선·GIF 1주기"},
+  "facepull_strengthlog":{"exercise":"facepull","reps":1,"minSetReps":1,"split":"dev","view":"옆 대각선·GIF 1주기"},
+  "hipabduction_strengthlog":{"exercise":"hipabduction","reps":1,"minSetReps":1,"split":"dev","view":"앞 대각선·GIF 1주기"},
+  "chestpress_puregym":{"exercise":"chestpress","reps":1,"minSetReps":1,"range":[32,37.6],"split":"dev","view":"옆 대각선·설명/클로즈업 전 실제 밀기 1회","note":"25.7~32초는 손잡이를 잡고 설명하는 준비 장면이다. 큰 원본 프레임으로 확인해 제외했다."},
+  "facepull_band_strengthlog":{"exercise":"facepull","reps":1,"minSetReps":1,"split":"holdout","view":"앞 대각선·밴드 페이스 풀·GIF 1주기","note":"개발 규칙 확정 뒤 확인한 별도 사람/도구 시범. 결과로 규칙을 조정하지 않는다."},
+  "seatedlegcurl_single_strengthlog":{"exercise":"seatedlegcurl","reps":1,"minSetReps":1,"split":"holdout","view":"앞 대각선·한 다리·GIF 1주기","note":"한 다리 변형은 아직 지원을 보장하지 않는다. 개발 규칙 확정 후 확인하며 실패도 남긴다."}
+}

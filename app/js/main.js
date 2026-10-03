@@ -111,7 +111,7 @@ function updatePickUI() {
   const weights = [...picked].filter((id) => EXERCISE_BY_ID[id].kind === 'reps');
   const box = $('pick-weights');
   box.hidden = weights.length === 0;
-  box.innerHTML = '<div style="font-weight:700">무게 (선택)</div><div class="muted small">덤벨·바벨 무게를 적어두면 세트마다 함께 기록돼요. 나중에 요약 화면에서도 고칠 수 있어요.</div>'
+  box.innerHTML = '<div style="font-weight:700">무게 (선택)</div><div class="muted small">덤벨·바벨·기구의 무게를 적어두면 세트마다 함께 기록돼요. 나중에 요약 화면에서도 고칠 수 있어요.</div>'
     + weights.map((id) => `<div class="weight-row"><span style="flex:1">${esc(exName(id))}</span>
       <input type="number" inputmode="decimal" min="0" step="0.5" placeholder="kg" data-weight="${id}" value="${store.lastWeight(id) ?? ''}"> kg</div>`).join('');
 }

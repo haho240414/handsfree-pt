@@ -65,6 +65,16 @@ export const PLAN_META = {
   birddog: { eq: 'body', type: 'core', reps: [8, 12, 16], slot: ['core'], note: '반대 팔·다리 한 쌍마다 1회, 좌우 합쳐서' },
   deadbug: { eq: 'body', type: 'core', reps: [8, 12, 16], slot: ['core'], note: '반대 팔·다리 한 쌍마다 1회, 좌우 합쳐서' },
   shouldertap: { eq: 'body', type: 'core', reps: [10, 16, 20], slot: ['core'], note: '한 손마다 1회, 좌우 합쳐서' },
+  inclinedbpress: { eq: 'dumbbell', type: 'compound', reps: [8, 10, 12], slot: ['push', 'push2'], note: '각도 조절 벤치 필요' },
+  barbellcurl: { eq: 'gym', type: 'iso', reps: [10, 12, 12], slot: ['biceps'], note: '바벨·EZ바, 양팔 함께 1회' },
+  onearmrow: { eq: 'dumbbell', type: 'compound', reps: [8, 10, 12], slot: ['pull', 'pull2'], note: '벤치 필요, 왼쪽·오른쪽을 각각 한 세트로' },
+  cablelateral: { eq: 'gym', type: 'iso', reps: [10, 12, 15], slot: ['shoulder'], note: '한쪽씩, 왼쪽·오른쪽을 각각 한 세트로' },
+  ropepushdown: { eq: 'gym', type: 'iso', reps: [10, 12, 15], slot: ['triceps'], note: '로프 손잡이, 양팔 함께 1회' },
+  hipthrust: { eq: 'gym', type: 'compound', reps: [8, 10, 12], slot: ['hinge'], note: '벤치·바벨 필요' },
+  seatedlegcurl: { eq: 'gym', type: 'iso', reps: [10, 12, 15], slot: ['legiso'], note: '시티드 레그 컬 기구' },
+  facepull: { eq: 'gym', type: 'iso', reps: [10, 12, 15], slot: ['pull2', 'shoulder'], note: '케이블·로프 손잡이' },
+  hipabduction: { eq: 'gym', type: 'iso', reps: [10, 12, 15], slot: ['legiso'], note: '다리 벌리기 기구' },
+  chestpress: { eq: 'gym', type: 'compound', reps: [8, 10, 12], slot: ['push'], note: '체스트 프레스 기구' },
 };
 
 const EQ_RANK = { body: 0, dumbbell: 1, gym: 2 };
