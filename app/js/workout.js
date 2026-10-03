@@ -12,7 +12,7 @@ import { Voice, nativeKorean } from './voice.js';
 import { TiltSensor } from './tilt.js';
 import { DiagRecorder, corrections } from './diag.js';
 import { openCamera, widenCamera, cameraSummary } from './camera.js';
-import { framingIssue, FramingGuide } from './framing.js';
+import { framingIssue, exerciseFraming, FramingGuide } from './framing.js';
 import { PlanRunner, isHold, isTimer, isTimed, TIMER_STEPS, PLAN_META, weightStep } from './routine.js';
 import { loadDemos, playDemo, hasDemo } from './demo.js';
 import * as store from './store.js';
@@ -1194,8 +1194,7 @@ export class Workout {
   // 화면 구도: 안 보이는 부위에 따라 어떻게 하면 되는지. speak = 소리로도 알려줄 만큼 중요한지
   _framingOptions(snap) {
     const ex = EXERCISE_BY_ID[this.tracker.o.fixed || snap.exercise];
-    const upperBody = ex && ['팔', '등', '가슴·어깨'].includes(ex.group);
-    return { upperBody, bothArms: ex && ['fly', 'reversefly'].includes(ex.id) };
+    return exerciseFraming(ex);
   }
   _framing(snap) { return framingIssue(snap, this._framingOptions(snap)); }
 

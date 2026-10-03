@@ -241,6 +241,7 @@ export const EXERCISES = [
   // ───────── 가슴·어깨 ─────────
   {
     id: 'pushup', name: '푸시업', group: '가슴·어깨', unit: '회', kind: 'reps', priority: 9, verified: true,
+    framing: 'full', requireArms: true,
     tip: '옆이나 대각선에서 머리~발끝이 한 화면에',
     signal: (f) => f.shoulderOverWrist, prom: 0.08, minDur: 0.4, maxDur: 8,
     tempo: { first: 'ecc', ecc: '내려가기', con: '밀기', dist: (f) => f.shoulderOverWrist },
@@ -784,6 +785,87 @@ EXERCISES.push(
     tip: '옆에서 머리·손목·무릎까지 보이게. 엉덩이를 뒤로 빼며 내려요', leadIn: false }),
   variant('bench', { id: 'dumbbellbench', name: '덤벨 벤치 프레스', aliases: ['덤벨 체스트 프레스', 'dumbbell chest press'],
     tip: '벤치 옆·대각선에서 양팔과 몸통이 보이게', leadIn: true }),
+  variant('pushup', { id: 'kneepushup', name: '무릎 푸시업', aliases: ['니 푸시업', 'kneeling push up', 'knee pushup'],
+    tip: '옆·대각선에서 손목과 무릎까지 보이게. 무릎을 바닥에 대고 밀어요',
+    // 무릎 지지에서는 가슴을 내릴 때 몸통 기울기 변화가 일반 푸시업보다 커진다.
+    check: (w) => [
+      ['엎드린 자세', and(between(M(w, 'torsoTilt'), 45, 115), lt(M(w, 'chestUp'), -0.4)), 'core'],
+      ['손으로 바닥을 짚음', gt(P(w, 'shoulderOverWrist', 90), 0.2), 'core'],
+      ['엉덩이는 편 채', gt(P(w, 'hip', 10), 125)],
+      ['팔을 굽혔다 폄', and(gt(R(w, 'elbow'), 25), lt(P(w, 'elbow', 10), 140)), 'soft'],
+    ],
+    // 무릎을 댄 자세에 발목 기준 hipSag를 쓰면 정상 동작에도 허리 처짐을 경고한다.
+    form: (w) => [['shallow', P(w, 'elbow', 10) > 115, '천천히 내려가기', '팔꿈치를 굽혀 가슴을 바닥 쪽으로 내려 보세요']] }),
+  variant('pushup', { id: 'inclinepushup', name: '인클라인 푸시업', aliases: ['경사 푸시업', '벤치 푸시업', 'incline push up'],
+    tip: '튼튼한 받침에 손을 올리고, 옆에서 손목·무릎·발이 보이게',
+    form: (w) => [['shallow', P(w, 'elbow', 10) > 115, '천천히 내려가기', '팔꿈치를 굽혀 가슴을 받침 쪽으로 내려 보세요']] }),
+  variant('lunge', { id: 'reverselunge', name: '리버스 런지', aliases: ['백 런지', '뒤로 런지', 'reverse lunge'],
+    tip: '옆·대각선에서 두 무릎과 발이 보이게. 뒤로 한 발 내딛고 돌아와요' }),
+  variant('squat', { id: 'chairsquat', name: '의자 스쿼트', aliases: ['체어 스쿼트', '앉았다 일어서기', 'chair squat'],
+    tip: '튼튼한 의자에 앉았다 일어나요. 옆에서 두 무릎과 발이 보이게',
+    // 의자 높이에 맞춰 앉는 운동이므로 일반 스쿼트의 깊이 경고를 제외한다.
+    form: (w, b) => EXERCISES.find((e) => e.id === 'squat').form(w, b).filter((r) => r[0] !== 'shallow') }),
+);
+
+// 맨몸 확장: 소수 공개 시범으로 검증한 베타. 직접 고른 운동만 세며 기존 자동 인식 후보는 유지한다.
+// 교차 팔다리는 다리/반대 팔 중 보이는 신호를 쓰되, 판정 구간에서 둘의 실제 움직임을 모두 확인한다.
+const extension = (f) => {
+  const a = [f.sideHip, f.oppositeArm].filter(fin);
+  return a.length ? -Math.max(...a) : NaN;
+};
+const oppositeLimbs = (w, b) => [
+  ['다리를 뒤로 폈다 돌아옴', R(w, 'sideHip') > 30 && M(b, 'sideHip') > 130, 'core'],
+  ['반대 팔을 함께 뻗음', R(w, 'oppositeArm') > 35 && M(b, 'oppositeArm') > 125, 'core'],
+];
+EXERCISES.push(
+  {
+    id: 'birddog', name: '버드 독', aliases: ['버드독', 'bird dog'], group: '코어', unit: '회', kind: 'reps',
+    priority: 5, verified: false, auto: false, sided: true, framing: 'full', requireArms: true, bothArms: true,
+    tip: '옆·대각선에서 양팔과 무릎이 보이게. 반대 팔·다리를 뻗었다 돌아오면 1회',
+    signal: extension, prom: 30, minDur: 0.6, maxDur: 10, contextBefore: 0.8,
+    tempo: { first: 'con', con: '뻗기', ecc: '돌아오기' },
+    check: (w, b) => [
+      ['네발 자세', and(gt(M(w, 'torsoTilt'), 55), lt(M(w, 'chestUp'), -0.4), lt(M(w, 'kneeMin'), 135)), 'core'],
+      ...oppositeLimbs(w, b),
+    ],
+  },
+  {
+    id: 'deadbug', name: '데드 버그', aliases: ['데드버그', 'dead bug'], group: '코어', unit: '회', kind: 'reps',
+    priority: 5, verified: false, auto: false, sided: true, framing: 'full', requireArms: true, bothArms: true,
+    tip: '옆·대각선에서 양팔과 무릎이 보이게. 반대 팔·다리를 내렸다 돌아오면 1회',
+    signal: extension, prom: 30, minDur: 0.6, maxDur: 10, contextBefore: 0.8,
+    tempo: { first: 'ecc', ecc: '내리기', con: '돌아오기' },
+    check: (w, b) => [
+      ['등을 대고 누움', and(between(M(w, 'torsoTilt'), 60, 120), gt(M(w, 'chestUp'), 0.4)), 'core'],
+      ...oppositeLimbs(w, b),
+    ],
+  },
+  {
+    id: 'shouldertap', name: '플랭크 숄더 탭', aliases: ['숄더탭', '어깨 터치', 'plank shoulder tap'], group: '코어', unit: '회', kind: 'reps',
+    priority: 5, verified: false, auto: false, sided: true, framing: 'full', requireArms: true, bothArms: true,
+    tip: '앞 대각선에서 양손이 보이게. 반대 어깨를 짚었다 손을 내려놓으면 1회',
+    signal: (f) => f.wristOppShoulder, prom: 0.12, minDur: 0.4, maxDur: 6,
+    tempo: { first: 'con', con: '어깨 짚기', ecc: '내려놓기', dist: (f) => f.wristOppShoulder },
+    check: (w, b) => [
+      ['엎드린 플랭크', M(w, 'torsoTilt') > 55 && M(w, 'torsoTilt') < 115 && M(w, 'chestUp') < -0.4 && M(w, 'observedHip') > 125, 'core'],
+      // 7.5fps로 줄인 원본은 접촉 순간이 0.44m로 추정됨. 절대 거리와 원위치 대비 접근 비율을 함께 본다.
+      ['손이 반대 어깨에 접근', M(b, 'wristOppShoulder') < 0.5 && M(b, 'wristOppShoulder') / P(w, 'wristOppShoulder', 90) < 0.85, 'core'],
+      ['반대 팔로 버팀(양팔 푸시업 아님)', P(w, 'oppositeElbow', 10) > 135, 'core'],
+      ['한 손을 바닥에 내려놓음', gt(P(w, 'shoulderOverWrist', 90), 0.3), 'core'],
+    ],
+  },
+  {
+    id: 'pikepushup', name: '파이크 푸시업', aliases: ['파이크푸시업', 'pike push up'], group: '가슴·어깨', unit: '회', kind: 'reps',
+    priority: 5, verified: false, auto: false, framing: 'full', requireArms: true,
+    tip: '옆·대각선에서 손목·엉덩이·발이 보이게. 엉덩이를 높이고 팔을 굽혔다 펴요',
+    signal: (f) => f.shoulderOverWrist, prom: 0.07, minDur: 0.5, maxDur: 8,
+    tempo: { first: 'ecc', ecc: '내려가기', con: '밀기', dist: (f) => f.shoulderOverWrist },
+    check: (w) => [
+      ['엉덩이를 높인 엎드린 자세', M(w, 'torsoTilt') > 105 && M(w, 'chestUp') < -0.35 && M(w, 'observedHip') < 125, 'core'],
+      ['팔을 굽혔다 폄', R(w, 'elbow') > 20 && P(w, 'elbow', 10) < 130, 'core'],
+      ['손으로 바닥을 짚음', gt(P(w, 'shoulderOverWrist', 90), 0.25), 'core'],
+    ],
+  },
 );
 
 export const EXERCISE_BY_ID = Object.fromEntries(EXERCISES.map((e) => [e.id, e]));

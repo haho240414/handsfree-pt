@@ -25,12 +25,16 @@ const PICK = {
   kickback: ['kickback_puregym', [0, 6.6]], concentrationcurl: ['concentration_strengthlog'],
   pullover: ['pullover_strengthlog'], shrug: ['shrug_strengthlog'], hammercurl: ['hammer_strengthlog'],
   gobletsquat: ['goblet_strengthlog'], dumbbellrdl: ['dbrdl_strengthlog'], dumbbellbench: ['dbbench_puregym'],
+  birddog: ['birddog_lyndhurst'], deadbug: ['deadbug_strengthlog'], shouldertap: ['shouldertap_strengthlog'],
+  pikepushup: ['pikepushup_strengthlog'], kneepushup: ['kneepushup_strengthlog'], inclinepushup: ['inclinepushup_strengthlog'],
+  reverselunge: ['reverselunge_strengthlog'], chairsquat: ['chairsquat_strengthlog'],
 };
 // 영상이 없는 운동: 비슷한 자세를 빌려 정지 화면으로
 const STILL = { plank: ['pushup_isolated_side', 'top'] };
 const J = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]; // 코·어깨·팔꿈치·손목·엉덩이·무릎·발목
 // 좌우를 번갈아 하는 운동(한쪽 1회)은 양쪽 2회를 한 묶음으로 보여준다
 const ALTERNATE = new Set(['highknees', 'climber', 'russian', 'bicycle']);
+const PAIR_DEMOS = new Set(['deadbug', 'shouldertap', 'reverselunge']);
 
 const un = (a) => a.map(([x, y, z, visibility]) => ({ x, y, z, visibility }));
 const load = (n) => JSON.parse(fs.readFileSync(path.join(ROOT, 'test/fixtures', `${n}.full.json`), 'utf8'));
@@ -47,6 +51,7 @@ function window(fx, ex, range) {
   if (kind === 'hold') return holdAt != null ? [holdAt + 0.5, holdAt + 2.5] : range ? [range[0] + 1, range[0] + 3] : null;
   const reps = tr.log.filter((c) => c.valid);
   if (!reps.length) return null;
+  if (PAIR_DEMOS.has(ex) && reps.length >= 2) return [reps[0].tStart - 0.15, reps[1].tEnd + 0.9];
   // 진폭이 중앙값에 가장 가까운 반복(너무 얕거나 튄 반복 대신 '보통'인 1회)
   const amps = reps.map((r) => r.amp).sort((a, b) => a - b);
   const med = amps[amps.length >> 1];

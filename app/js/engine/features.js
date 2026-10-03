@@ -157,6 +157,11 @@ export function computeFeatures(lm, wl) {
     angle3(wl[L.L_SHOULDER], wl[L.L_HIP], wl[L.L_KNEE]), minVis(lm, L.L_SHOULDER, L.L_HIP, L.L_KNEE),
     angle3(wl[L.R_SHOULDER], wl[L.R_HIP], wl[L.R_KNEE]), minVis(lm, L.R_SHOULDER, L.R_HIP, L.R_KNEE));
   f.hip = hip.avg; f.hipMin = hip.min;
+  // 교차 팔다리 운동은 한쪽씩 추적하며, 화면 밖 무릎 추정값으로 반복을 만들지 않는다.
+  f.hipL = observedVis(lm[L.L_KNEE]) >= VIS_MIN ? hip.L : NaN;
+  f.hipR = observedVis(lm[L.R_KNEE]) >= VIS_MIN ? hip.R : NaN;
+  const observedHips = [f.hipL, f.hipR].filter(Number.isFinite);
+  f.observedHip = observedHips.length ? observedHips.reduce((a,b)=>a+b,0) / observedHips.length : NaN;
 
   const elbow = sided(
     angle3(wl[L.L_SHOULDER], wl[L.L_ELBOW], wl[L.L_WRIST]), minVis(lm, L.L_SHOULDER, L.L_ELBOW, L.L_WRIST),
@@ -205,6 +210,11 @@ export function computeFeatures(lm, wl) {
   f.shoulderH = torsoVis >= VIS_MIN ? (hL.y + hR.y) / 2 - shMidY : NaN;
   f.elbowKneeL = minVis(lm, 13, 25) >= VIS_MIN ? Math.hypot(wl[13].x - wl[25].x, wl[13].y - wl[25].y, wl[13].z - wl[25].z) : NaN;
   f.elbowKneeR = minVis(lm, 14, 26) >= VIS_MIN ? Math.hypot(wl[14].x - wl[26].x, wl[14].y - wl[26].y, wl[14].z - wl[26].z) : NaN;
+  // 숄더 탭: 손목이 반대 어깨에 접근했다 원위치로 돌아오는 거리(m).
+  const distance = (a, b) => minVis(lm, a, b) >= VIS_MIN
+    ? Math.hypot(wl[a].x - wl[b].x, wl[a].y - wl[b].y, wl[a].z - wl[b].z) : NaN;
+  f.wristOppShoulderL = distance(L.L_WRIST, L.R_SHOULDER);
+  f.wristOppShoulderR = distance(L.R_WRIST, L.L_SHOULDER);
   f.noseDrop = vis(lm[L.NOSE]) >= VIS_MIN && torsoVis >= VIS_MIN ? wl[L.NOSE].y - shMidY : NaN;
 
   // 무릎 높이 차(m): 스쿼트는 두 무릎 높이가 같고, 런지는 뒷무릎이 바닥 가까이 내려간다
@@ -334,11 +344,15 @@ export const SMOOTH_KEYS = [
   'kneeDX', 'frontal', 'bodyLine', 'hipSag', 'shY', 'heelLift', 'noseDrop', 'torsoFrac',
   'hipMax', 'kneeMax', 'kneeAsym', 'stanceW', 'stanceD', 'ankleYDiff', 'wristDist', 'reach', 'handSide', 'shRoll', 'chestUp',
   'armMin', 'armL', 'armR', 'wristHL', 'wristHR', 'shoulderH', 'elbowKneeL', 'elbowKneeR',
+  'hipL', 'hipR', 'observedHip', 'wristOppShoulderL', 'wristOppShoulderR',
 ];
 
 /** 한쪽 팔의 신호·판정이 반대편 쉬는 팔과 섞이지 않게 한다. 몸통·두 손 간격은 그대로. */
 export function armFeatures(f, side) {
   const elbow = f[`elbow${side}`], arm = f[`arm${side}`], wristH = f[`wristH${side}`];
   return { ...f, elbow, elbowMin: elbow, arm, armMin: arm, armMax: arm,
-    wristH, wristHMax: wristH, shoulderOverWrist: -wristH, elbowKnee: f[`elbowKnee${side}`] };
+    wristH, wristHMax: wristH, shoulderOverWrist: -wristH, elbowKnee: f[`elbowKnee${side}`],
+    sideHip: f[`hip${side}`], oppositeArm: f[`arm${side === 'L' ? 'R' : 'L'}`],
+    oppositeElbow: f[`elbow${side === 'L' ? 'R' : 'L'}`],
+    wristOppShoulder: f[`wristOppShoulder${side}`] };
 }

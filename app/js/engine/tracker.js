@@ -178,7 +178,8 @@ export class Tracker {
 
   _candidate(ex, rep, ev) {
     const project = (frames) => rep.side ? frames.map((f) => armFeatures(f, rep.side)) : frames;
-    const w = project(this._window(rep.tStart - 0.2, rep.tEnd));
+    // 교차 팔다리는 시작 자세의 팔이 잠깐 가려지므로 바로 앞의 관찰된 자세까지 함께 확인한다.
+    const w = project(this._window(rep.tStart - (ex.contextBefore ?? 0.2), rep.tEnd));
     const b = project(this._window(rep.tBottom - 0.25, rep.tBottom + 0.25));
     const fixed = this.o.fixed === ex.id;
     // 핵심 조건을 실제로 본 첫 유효 반복이 있으면 다음 반복의 일시적 가림을 허용한다.

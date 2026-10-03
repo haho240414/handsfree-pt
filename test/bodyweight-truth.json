@@ -1,0 +1,12 @@
+{
+  "_note": "원본 시범 이미지를 먼저 보고 완전한 동작 수를 기록했다. GIF는 실제 한 주기만 추출했다. 앱과 같은 full 모델, MediaPipe Python 0.10.21/CPU, 15fps. 1회 자료는 minSetReps=1이며 앱 기본 세트 기준은 2회. 베타 8종은 직접 선택 모드로 평가한다. 개발 자료와 별도 데드 버그 영상 결과를 분리하며 갤럭시 실기 정확도를 뜻하지 않는다.",
+  "birddog_lyndhurst": {"exercise":"birddog","reps":6,"split":"dev","source":"https://www.lyndhurstchiro.co.uk/exercise-hub-lyndhurst-chiropractic-clinic-rehabilitation-for-every-body/","view":"옆 대각선·한쪽 3회 뒤 반대쪽 3회","note":"앞의 손이 뻗을 때 잠깐 화면 밖으로 나옴. 팔꿈치와 다리의 관찰된 움직임으로 판정."},
+  "deadbug_strengthlog": {"exercise":"deadbug","reps":2,"split":"dev","source":"https://www.strengthlog.com/dead-bugs/","view":"옆 대각선·GIF 1주기·좌우 각 1회"},
+  "shouldertap_strengthlog": {"exercise":"shouldertap","reps":2,"split":"dev","source":"https://www.strengthlog.com/plank-with-shoulder-taps/","view":"앞 대각선·GIF 1주기·좌우 각 1회"},
+  "pikepushup_strengthlog": {"exercise":"pikepushup","reps":1,"minSetReps":1,"split":"dev","source":"https://www.strengthlog.com/best-bodyweight-exercises/","view":"옆 대각선·GIF 1주기"},
+  "kneepushup_strengthlog": {"exercise":"kneepushup","reps":1,"minSetReps":1,"split":"dev","source":"https://www.strengthlog.com/kneeling-push-up/","view":"옆 대각선·GIF 1주기"},
+  "inclinepushup_strengthlog": {"exercise":"inclinepushup","reps":1,"minSetReps":1,"split":"dev","source":"https://www.strengthlog.com/incline-push-up/","view":"측면·GIF 1주기"},
+  "reverselunge_strengthlog": {"exercise":"reverselunge","reps":2,"split":"dev","source":"https://www.strengthlog.com/reverse-body-weight-lunges/","view":"정면 대각선·GIF 1주기·좌우 각 1회"},
+  "chairsquat_strengthlog": {"exercise":"chairsquat","reps":1,"minSetReps":1,"split":"dev","source":"https://www.strengthlog.com/chair-squats/","view":"측면·GIF 1주기"},
+  "deadbug_lyndhurst": {"exercise":"deadbug","reps":4,"split":"holdout","source":"https://www.lyndhurstchiro.co.uk/exercise-hub-lyndhurst-chiropractic-clinic-rehabilitation-for-every-body/","view":"옆 대각선·별도 영상·좌우 번갈아 4회","note":"개발 규칙 확정 뒤 확인했으며 이 자료 결과로 임계값을 조정하지 않았다. 초기 결과 4/4회."}
+}

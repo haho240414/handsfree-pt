@@ -57,6 +57,14 @@ export const PLAN_META = {
   gobletsquat: { eq: 'dumbbell', type: 'compound', reps: [8, 10, 12], slot: ['lower'] },
   dumbbellrdl: { eq: 'dumbbell', type: 'compound', reps: [8, 10, 12], slot: ['hinge'] },
   dumbbellbench: { eq: 'dumbbell', type: 'compound', reps: [8, 10, 12], slot: ['push'], note: '벤치 필요' },
+  kneepushup: { eq: 'body', type: 'compound', reps: [6, 8, 12], slot: ['push'], note: '무릎을 바닥에 대고' },
+  inclinepushup: { eq: 'body', type: 'compound', reps: [6, 8, 12], slot: ['push', 'push2'], note: '튼튼한 받침에 손을 올리고' },
+  pikepushup: { eq: 'body', type: 'compound', reps: [5, 8, 10], slot: ['shoulder'], note: '엉덩이를 높인 자세로' },
+  reverselunge: { eq: 'body', type: 'compound', reps: [8, 10, 16], slot: ['lower', 'lunge'], note: '한쪽마다 1회, 좌우 합쳐서' },
+  chairsquat: { eq: 'body', type: 'compound', reps: [6, 10, 12], slot: ['lower'], note: '움직이지 않는 튼튼한 의자' },
+  birddog: { eq: 'body', type: 'core', reps: [8, 12, 16], slot: ['core'], note: '반대 팔·다리 한 쌍마다 1회, 좌우 합쳐서' },
+  deadbug: { eq: 'body', type: 'core', reps: [8, 12, 16], slot: ['core'], note: '반대 팔·다리 한 쌍마다 1회, 좌우 합쳐서' },
+  shouldertap: { eq: 'body', type: 'core', reps: [10, 16, 20], slot: ['core'], note: '한 손마다 1회, 좌우 합쳐서' },
 };
 
 const EQ_RANK = { body: 0, dumbbell: 1, gym: 2 };
