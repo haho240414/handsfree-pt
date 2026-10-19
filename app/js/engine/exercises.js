@@ -65,10 +65,14 @@ export const EXERCISES = [
   // ───────── 하체 ─────────
   {
     id: 'squat', name: '스쿼트', group: '하체', unit: '회', kind: 'reps', priority: 9, verified: true,
-    tip: '정면 또는 옆에서 무릎까지는 꼭 보이게',
+    tip: '정면 또는 옆에서 무릎까지는 꼭 보이게 (스쿼트만 골랐으면 허리까지만 보여도 세요)',
+    tipFixed: '정면이나 옆에서, 허리까지만 보여도 세요. 무릎까지 보이면 자세 교정도 해요',
     // 신호: 엉덩이 관절 각도(어깨-엉덩이-무릎). 발목이 화면 밖이어도 무릎까지만 보이면 센다.
     // 실측: 선 자세 160~166°, 바닥 33(측면)~93°(정면)
     signal: (f) => f.hip, prom: 30, minDur: 0.5, maxDur: 8,
+    // 가까운 화면(운동을 직접 골랐을 때만): 앉을 때 무릎이 화면 밖으로 나가 엉덩이 각도가 끊기면 어깨 높이로 센다.
+    // 단위 = 서 있을 때 화면상 몸통 길이(가까이 서면 몸통이 크게 보이니 거리와 상관없게)
+    close: { signal: (f) => (f.torsoRef > 0 && Number.isFinite(f.shY) ? -f.shY / f.torsoRef : NaN), prom: 0.45, minDur: 0.6, maxDur: 8 },
     tempo: { first: 'ecc', ecc: '앉기', con: '일어서기', dist: (f) => f.hipH },
     check: (w, b) => [
       ['서서 하는 동작', standing(w), 'core'],
@@ -986,6 +990,9 @@ export function uniqueExerciseFamilies(ids) {
     families.add(exerciseFamily(id)); return true;
   });
 }
+// 운동을 직접 골랐고 가까운 화면 신호(close)가 있는 운동(스쿼트): 서 있을 때 허리까지만 보이면 센다
+// (test/videos5 무릎 위로 자른 영상 4개 모두 정확 — 앉을 때 무릎이 화면 밖으로 나가도 어깨 높이로 셈)
+export const closeOK = (id) => !!EXERCISE_BY_ID[id]?.close;
 
 /** 자세 교정 코드 → 설명 (기록 화면용) */
 export function formInfo(exId, code) {

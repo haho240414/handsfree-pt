@@ -49,6 +49,14 @@ export class Tracker {
     this.repSpecs = this.specs.filter((e) => e.kind === 'reps').sort((a, b) => b.priority - a.priority);
     this.holdSpecs = this.specs.filter((e) => e.kind === 'hold');
     this.counters = Object.fromEntries(this.repSpecs.map((e) => [e.id, e.sided ? new ArmRepCounter(e) : new RepCounter(e)]));
+    // 가까운 화면의 보조 신호(exercises.js close): 운동을 직접 골랐을 때만. 폰을 가까이 두면 앉을 때 무릎이 화면 밖으로 나가
+    // 주 신호(엉덩이 각도)가 끊기는데, 그 반복만 보조 신호(어깨 높이)로 센다
+    this.closeSpecs = this.o.fixed ? this.repSpecs.filter((e) => e.close) : [];
+    this.closeCounters = Object.fromEntries(this.closeSpecs.map((e) => [e.id, new RepCounter(e.close)]));
+    this.closePending = {};
+    this.lastRep = {};      // 운동별 마지막으로 센 반복 {tStart, tEnd, close} — 두 신호가 같은 반복을 두 번 세지 않게
+    this.torsoHist = [];    // 서 있을 때 화면상 몸통 길이 (보조 신호의 단위)
+    this.torsoRef = null;
     this.smoother = new FeatureSmoother(SMOOTH_KEYS, this.o.smoothTau);
     this.buf = [];
     this.valid = {};
@@ -153,12 +161,14 @@ export class Tracker {
     this.lastF = f;
 
     if (f) {
+      if (this.closeSpecs.length) this._torsoRef(f);
       for (const ex of this.repSpecs) {
         const reps = ex.sided
           ? this.counters[ex.id].update(t, Object.fromEntries(['L', 'R'].map((side) => [side, ex.signal(armFeatures(f, side))])))
           : [this.counters[ex.id].update(t, ex.signal(f))].filter(Boolean);
         for (const rep of reps) this._candidate(ex, rep, ev);
       }
+      for (const ex of this.closeSpecs) this._closeRep(ex, t, f, ev);
       if (this.holdSpecs.length) this._hold(t, f, ev);
       if (this.state === 'reps') this._tempo(ev, false);
     }
@@ -176,7 +186,38 @@ export class Tracker {
     return out.reverse();
   }
 
+  // 서 있을 때(몸통 30° 미만) 화면상 어깨~엉덩이 길이의 중앙값 → f.torsoRef (가까울수록 크다)
+  _torsoRef(f) {
+    if (Number.isFinite(f.torsoFrac) && f.torsoTilt < 30) {
+      this.torsoHist.push(f.torsoFrac);
+      if (this.torsoHist.length > 45) this.torsoHist.shift();
+      if (this.torsoHist.length >= 5) this.torsoRef = median(this.torsoHist);
+    }
+    f.torsoRef = this.torsoRef;
+  }
+
+  /**
+   * 보조 신호로 센 반복: 주 신호가 같은 반복을 셀 시간(0.6초)을 준 뒤, 주 신호가 그 반복 동안 끊겼고(15% 이상)
+   * 이미 센 반복과 겹치지 않을 때만 받아들인다. 다 보이는데 주 신호가 안 셌다면 그 동작이 아니다
+   */
+  _closeRep(ex, t, f, ev, flush = false) {
+    const rep = f ? this.closeCounters[ex.id].update(t, ex.close.signal(f)) : null;
+    if (rep) this.closePending[ex.id] = rep;
+    const p = this.closePending[ex.id];
+    if (!p || (!flush && t - p.tEnd < 0.6)) return;
+    delete this.closePending[ex.id];
+    const last = this.lastRep[ex.id];
+    if (last && last.tEnd > p.tStart - 0.3) return;
+    const win = this._window(p.tStart, p.tEnd);
+    const miss = win.filter((x) => !Number.isFinite(ex.signal(x))).length / Math.max(1, win.length);
+    if (miss < 0.15) return;
+    this._candidate(ex, { ...p, close: true }, ev);
+  }
+
   _candidate(ex, rep, ev) {
+    // 보조 신호(가까운 화면)로 이미 센 반복을 주 신호가 뒤늦게 또 세면 버린다
+    const prev = this.lastRep[ex.id];
+    if (!rep.close && prev?.close && prev.tEnd > rep.tStart - 0.3) return;
     const project = (frames) => rep.side ? frames.map((f) => armFeatures(f, rep.side)) : frames;
     // 교차 팔다리는 시작 자세의 팔이 잠깐 가려지므로 바로 앞의 관찰된 자세까지 함께 확인한다.
     const w = project(this._window(rep.tStart - (ex.contextBefore ?? 0.2), rep.tEnd));
@@ -206,10 +247,14 @@ export class Tracker {
       });
     }
     if (!valid) return;
-    if (ex.sided && this.counters[ex.id].isDuplicate(rep)) return;
-    this.counters[ex.id].accept(rep.amp, rep);
-    const issues = ex.form ? ex.form(w, b).filter((row) => row[1] === true).map((row) => row[0]) : [];
+    if (ex.sided && !rep.close && this.counters[ex.id].isDuplicate(rep)) return;
+    if (rep.close) this.closeCounters[ex.id].accept(rep.amp);
+    else this.counters[ex.id].accept(rep.amp, rep);
+    this.lastRep[ex.id] = { tStart: rep.tStart, tEnd: rep.tEnd, close: !!rep.close };
+    // 가까운 화면에선 무릎이 안 보여 자세 교정·템포를 잴 수 없다
+    const issues = ex.form && !rep.close ? ex.form(w, b).filter((row) => row[1] === true).map((row) => row[0]) : [];
     const r = { ...rep, ex: ex.id, issues };
+    if (rep.close) r.tempo = null;
 
     if (this.state === 'reps' && this.set.exercise === ex.id) {
       this._countRep(r, ev);
@@ -425,6 +470,7 @@ export class Tracker {
   /** 운동 종료 시 진행 중인 세트를 마무리 */
   finish() {
     const ev = [];
+    for (const ex of this.closeSpecs) this._closeRep(ex, this.t, null, ev, true); // 기다리던 보조 신호 반복
     if (this.set) {
       if (this.set.kind === 'hold') this.set.holdSec = this.set.lastOkT - this.set.startT;
       this._endSet(ev, 'finish');

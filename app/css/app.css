@@ -516,3 +516,41 @@ dialog h3 { margin: 0 0 10px; }
 .num-input { display: inline-flex; align-items: center; gap: 6px; }
 .num-input input { width: 84px; text-align: right; }
 .hc-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+
+/* 하루 목표: 홈 카드·목표 화면 */
+#goal-card { margin-bottom: 12px; }
+.goal-card { display: flex; flex-direction: column; gap: 6px; }
+.goal-card.met { border: 2px solid var(--accent); }
+.goal-empty { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
+.goal-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+.goal-streak { font-size: 14px; font-weight: 700; color: var(--warn); }
+.goal-row { display: grid; grid-template-columns: minmax(64px, 30%) 1fr auto; align-items: center; gap: 10px; font-size: 15px; }
+.goal-row .grp-bar { height: 12px; }
+.goal-row.done .grp-bar i { background: var(--accent-text); }
+.goal-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.goal-val { font-variant-numeric: tabular-nums; font-size: 14px; min-width: 5.5em; text-align: right; }
+.goal-actions { display: flex; gap: 8px; margin-top: 6px; }
+.goal-actions .btn-primary { flex: 1; }
+.goal-bump { background: var(--surface-2); border-radius: 12px; padding: 10px 12px; font-size: 14px; display: flex; flex-direction: column; gap: 8px; }
+.goal-edit-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.goal-edit-row select { min-width: 0; }
+.goal-edit-row .stepper input { width: 64px; text-align: center; }
+.goal-edit-row .unit { font-size: 13px; color: var(--text-2); }
+.gi-del { font-size: 22px; }
+.time-ctl { display: inline-flex; align-items: center; gap: 10px; }
+.time-ctl input[type="time"] { font-size: 16px; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text); }
+.time-ctl input[type="time"]:disabled { opacity: .45; }
+.link-inline { background: none; border: 0; padding: 0; color: var(--accent-text); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+@media (max-width: 360px) { .goal-edit-row { grid-template-columns: 1fr auto; } .goal-edit-row .gi-del { grid-column: 2; grid-row: 1; } }
+
+/* 카메라 고르기·폰 어디에 둘까요 */
+.cam-chip { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; }
+.cam-chip span { font-size: 12px; color: var(--text-2); font-weight: 400; }
+.place-table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 6px 0 10px; }
+.place-table th { font-size: 12px; color: var(--text-2); font-weight: 600; text-align: right; padding: 4px 2px; vertical-align: bottom; }
+.place-table th:first-child, .place-table td:first-child { text-align: left; }
+.place-table th span, .place-table td span { display: block; font-size: 11px; font-weight: 400; color: var(--text-2); }
+.place-table td { padding: 7px 2px; border-top: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.place-table tr.worst td { color: var(--text-2); font-weight: 400; }
+.place-help .feedback li { margin: 4px 0; }
+.place-link { display: block; margin: 8px auto 4px; font-size: 14px; font-weight: 500; color: var(--text-2); text-align: center; }

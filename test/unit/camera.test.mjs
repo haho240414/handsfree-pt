@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openCamera, widenCamera, cameraSummary, listCameras } from '../../app/js/camera.js';
+import { openCamera, widenCamera, cameraSummary, listCameras, placementDistance, placementTable, VIEW_RANGE, bestDistance } from '../../app/js/camera.js';
 
 function media(t, methods) {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
@@ -114,4 +114,21 @@ test('후면 전환 요청을 존중하고 전면 광각으로 다시 바꾸지 
   assert.equal(await openCamera({cameraWide:true,facingMode:'environment'}),rear);
   assert.equal(request.video.facingMode,'environment');
   assert.equal(request.video.resizeMode,'none');
+});
+
+// 폰을 어디에 두면 얼마나 가까워도 되는지 (placementDistance)
+
+test('바닥에 똑바로 > 탁자 > 바닥에서 뒤로 기울이기 (전신, 시야 70°)', () => {
+  const r = Object.fromEntries(placementTable(70).map((x) => [x.key, x]));
+  assert.ok(r.floor.full > r.table.full && r.table.full >= r.floorTilt.full, JSON.stringify(r));
+  assert.ok(r.floor.full >= 2.5 && r.floor.full <= 2.9, `바닥 ${r.floor.full}`);
+  // 가슴 높이에서 상체만이면 1m 안팎
+  assert.ok(r.chest.upper <= 1.1 && r.chest.upper < r.chest.knees && r.chest.knees < r.chest.full);
+});
+
+test('시야가 넓을수록 가까이, 너무 기울이면 발밑이 안 보임(null)', () => {
+  assert.ok(bestDistance(108) < bestDistance(80) && bestDistance(80) < bestDistance(70));
+  assert.equal(placementDistance(70, VIEW_RANGE.full, { h: 0.08, tilt: 40 }), null);
+  // 손계산: 높이 0.9m·시야 70°·똑바로 → 머리(1.95m)까지 1.05/tan35° = 1.5m
+  assert.equal(placementDistance(70, VIEW_RANGE.full, { h: 0.9, tilt: 0 }), 1.5);
 });

@@ -288,7 +288,7 @@ export function computeFeatures(lm, wl) {
   // 모델이 화면 밖 관절을 높은 신뢰도로 추정해도 실제 화면에 보이는 부위라고 안내하지 않는다.
   const seen = (...idx) => idx.some((i) => vis(lm[i]) >= VIS_MIN
     && lm[i].x >= 0 && lm[i].x <= 1 && lm[i].y >= 0 && lm[i].y <= 1);
-  f.seen = { head: seen(0), hands: seen(15, 16), knees: seen(25, 26), feet: seen(27, 28) };
+  f.seen = { head: seen(0), hands: seen(15, 16), hips: seen(23, 24), knees: seen(25, 26), feet: seen(27, 28) };
   f.seen.arms = [ [11, 13, 15], [12, 14, 16] ].some((ids) => ids.every((i) => observedVis(lm[i]) >= VIS_MIN));
   f.seen.bothArms = [ [11, 13, 15], [12, 14, 16] ].every((ids) => ids.every((i) => observedVis(lm[i]) >= VIS_MIN));
   f.seen.bothKnees = [25,26].every(i=>observedVis(lm[i]) >= VIS_MIN);

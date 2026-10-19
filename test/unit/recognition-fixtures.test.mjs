@@ -32,7 +32,8 @@ test('기존 실제 영상: 49개 횟수·3개 버티기 검증과 오인식 성
   const truth=JSON.parse(fs.readFileSync(new URL('../truth.json',import.meta.url)));
   let n=0,exact=0,within1=0,wrongLabeled=0,wrongAll=0,holds=0;
   for(const [clip,t] of Object.entries(truth)) {
-    if(clip.startsWith('_')) continue;
+    // mode fixed = 운동을 골라서 할 때만 되는 화면(가까운 화면 스쿼트) → 아래 별도 시험
+    if(clip.startsWith('_') || t.mode==='fixed') continue;
     const {tr}=trackFixture(clip);
     const wrong=tr.sets.some(s=>s.exercise!==t.exercise);
     if(wrong) wrongAll++;
@@ -54,4 +55,14 @@ test('기존 실제 영상: 49개 횟수·3개 버티기 검증과 오인식 성
   assert.ok(within1>=44,`±1 ${within1}/49`);
   assert.equal(wrongLabeled,0);
   assert.ok(wrongAll<=3,`편집 영상 포함 오인식 ${wrongAll}`);
+});
+test('가까운 화면(무릎 위로 자른 영상): 스쿼트를 골라서 하면 4개 모두 정확, 원본 영상과 같은 횟수', () => {
+  const truth=JSON.parse(fs.readFileSync(new URL('../truth.json',import.meta.url)));
+  const close=Object.entries(truth).filter(([,t])=>t.mode==='fixed');
+  assert.equal(close.length,4);
+  for(const [clip,t] of close) {
+    const opts={fixed:t.exercise,minSetReps:1,holdMin:1,idleSec:600};
+    assert.equal(trackFixture(clip,opts).reps,t.reps,clip);
+    assert.equal(trackFixture(clip.replace(/_close$/,''),opts).reps,t.reps,`${clip} 원본`);
+  }
 });

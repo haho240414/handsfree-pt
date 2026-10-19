@@ -51,7 +51,7 @@ const stage = async (name, expression, ms) => {
 
 const app = await stage('앱', `(async () => ({
   url: location.href, native: window.__hfpt?.isNative, platform: Capacitor.getPlatform(),
-  plugins: ['TextToSpeech','App','Share','Filesystem','HealthConnect'].filter((p) => Capacitor.isPluginAvailable(p)),
+  plugins: ['TextToSpeech','App','Share','Filesystem','HealthConnect','LocalNotifications','CameraInfo'].filter((p) => Capacitor.isPluginAvailable(p)),
   koreanTTS: await window.__hfpt?.workout.voice.koreanAvailable(),
   webview: (navigator.userAgent.match(/Chrome\\/([\\d.]+)/) || [])[1], home: document.getElementById('btn-start-auto')?.innerText,
 }))()`);
@@ -160,6 +160,31 @@ const hc = await stage('헬스 커넥트', `(async () => {
   return out;
 })()`, 60000);
 
+// 참고 단계: 하루 목표 알림 — 목표를 정하면 14일치 알림이 걸리고, 시험 알림이 실제로 알림창에 뜨는지(dumpsys)
+const goal = await stage('하루 목표 알림', `(async () => {
+  const { store, syncReminders } = window.__hfpt;
+  store.setGoal({ on: true, items: [{ exercise: 'squat', amount: 50 }], minutes: 0, days: [0,1,2,3,4,5,6], remind: '20:00', lastCall: '22:00' });
+  const r = await syncReminders();
+  const P = Capacitor.Plugins.LocalNotifications;
+  const pending = (await P.getPending()).notifications || [];
+  await P.schedule({ notifications: [{ id: 100000002, title: 'CI 알림 시험', body: '핸즈프리 PT 점검', channelId: 'goal',
+    schedule: { at: new Date(Date.now() + 2000), allowWhileIdle: true }, isExactNotification: false }] });
+  return { sync: r, pending: pending.length, first: pending[0]?.title ?? null };
+})()`, 30000);
+await sleep(6000);
+let posted = null;
+try { posted = execFileSync('adb', ['shell', 'dumpsys', 'notification', '--noredact'], { timeout: 30000 }).toString().includes('CI 알림 시험'); } catch (e) { posted = String(e.message).slice(0, 120); }
+report.goalNotificationPosted = posted;
+console.log('[시험 알림 알림창에 뜸]', posted);
+// 참고 단계: 카메라 시야각(렌즈 정보로 계산) — 에뮬레이터 가상 카메라에도 값이 있어야
+const camFov = await stage('카메라 시야각', `(async () => {
+  const H = window.__hfpt;
+  const nat = H.NativeCameraInfo ? (await H.NativeCameraInfo.listCameras()).cameras : null;
+  let opts = null;
+  try { opts = (await H.cameraOptions({ probe: false })).map((c) => ({ name: c.name, facing: c.facing, fov: c.fovLong, dist: c.distance })); } catch (e) { opts = String(e.message || e); }
+  return { nat, opts };
+})()`, 30000);
+
 const required = app?.native === true && app?.plugins?.includes('TextToSpeech') && app?.plugins?.includes('HealthConnect')
   && engine?.knee === 180 && engine?.hipH === 0.9 && typeof model?.loadMs === 'number';
 report.required = required;
@@ -169,8 +194,12 @@ report.tiltOk = cam ? cam.tiltRaw != null : null;
 report.cameras = cams?.names ?? null;
 report.healthOk = hc?.first?.ids?.length === 2 && hc?.again?.ids?.length === 2 && hc?.deleted === true;
 report.healthSameRecord = report.healthOk ? hc.first.ids[0] === hc.again.ids[0] : null;
+report.goalOk = goal?.sync?.ok === true && goal?.pending > 0 && report.goalNotificationPosted === true;
+report.cameraFovOk = Array.isArray(camFov?.nat) && camFov.nat.some((c) => c.fovLong > 0);
 save();
 console.log(`필수 점검 ${required ? '통과' : '실패'} · 카메라 ${report.cameraOk ? '동작' : '확인 안 됨'} · 뒤로가기 ${report.backOk} · 기울기 센서 ${report.tiltOk ? `${cam.pitch?.toFixed?.(1) ?? '-'}°` : '값 없음'}`
-  + ` · 헬스 커넥트 ${report.healthOk ? `쓰기·고치기·지우기 통과(같은 기록 ${report.healthSameRecord})` : JSON.stringify(hc)}`);
+  + ` · 헬스 커넥트 ${report.healthOk ? `쓰기·고치기·지우기 통과(같은 기록 ${report.healthSameRecord})` : JSON.stringify(hc)}`
+  + ` · 목표 알림 ${report.goalOk ? `통과(${goal.pending}개 걸림, 시험 알림 뜸)` : JSON.stringify(goal)}`
+  + ` · 카메라 시야각 ${report.cameraFovOk ? camFov.nat.map((c) => `${c.facing} ${Math.round(c.fovLong)}°`).join(', ') : JSON.stringify(camFov)}`);
 try { ws.close(); } catch { /* 무시 */ }
 process.exit(required ? 0 : 1);

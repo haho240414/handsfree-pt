@@ -30,6 +30,8 @@
       <button class="mode-row" id="btn-open-routine" aria-pressed="false" data-mode="routine"><img class="ui-icon" src="./icons/ui/list-bullets.svg" alt=""><span class="mode-copy"><b>루틴</b><small id="routine-sub">목표에 맞춰 순서대로 운동하기</small></span><span class="mode-state"><img class="ui-icon" src="./icons/ui/check.svg" alt=""></span><img class="mode-arrow ui-icon" src="./icons/ui/caret-right.svg" alt=""></button>
     </div>
     <button class="btn btn-primary btn-lg home-start" id="btn-home-start">운동 시작 <img class="ui-icon" src="./icons/ui/arrow-right.svg" alt=""></button>
+    <button type="button" class="link-inline place-link" id="btn-place-help">폰은 어디에 둘까요? 바닥보다 탁자 위가 훨씬 가까워요</button>
+    <div id="goal-card"></div>
     <div class="recent-heading"><h2 class="section-title">최근 운동</h2><button class="icon-btn" data-go="history" aria-label="운동 기록 전체 보기"><img class="ui-icon" src="./icons/ui/caret-right.svg" alt=""></button></div>
     <div id="recent-list" class="session-list"></div>
   </section>
@@ -63,6 +65,19 @@
     </button>
     <div class="sticky-bottom">
       <button class="btn btn-primary btn-lg" id="btn-start-routine" disabled>루틴을 짜 주세요</button>
+    </div>
+  </section>
+
+  <!-- 하루 목표 -->
+  <section id="screen-goal" class="screen page" hidden>
+    <header class="topbar">
+      <button class="icon-btn" data-back aria-label="뒤로">‹</button>
+      <div class="topbar-title">하루 목표</div>
+      <span></span>
+    </header>
+    <div id="goal-body"></div>
+    <div class="sticky-bottom">
+      <button class="btn btn-primary btn-lg" id="btn-goal-save">저장</button>
     </div>
   </section>
 

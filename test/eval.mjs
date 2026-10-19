@@ -60,8 +60,9 @@ for (const [clip, t] of Object.entries(truth)) {
   if (!fx) { rows.push([clip, '(랜드마크 없음)']); continue; }
   const auto = run(fx);
   const fixed = run(fx, { fixed: t.exercise });
-  // 골라서만 재는 운동(auto: false)은 '직접 선택' 결과로 채점하고, 자동에선 아무것도 안 잡혀야 한다
-  const pickOnly = EXERCISE_BY_ID[t.exercise]?.auto === false;
+  // 골라서만 재는 운동(auto: false)·골라서 할 때만 되는 화면(mode: fixed, 예: 무릎이 잘린 가까운 화면)은
+  // '직접 선택' 결과로 채점하고, 자동에선 아무것도 안 잡혀야 한다
+  const pickOnly = EXERCISE_BY_ID[t.exercise]?.auto === false || t.mode === 'fixed';
   const autoReps = (pickOnly ? fixed : auto).sets.filter((s) => s.exercise === t.exercise).reduce((a, s) => a + (s.reps || 0), 0);
   const fixedReps = fixed.sets.reduce((a, s) => a + (s.reps || 0), 0);
   const wrong = auto.sets.filter((s) => s.exercise !== t.exercise);

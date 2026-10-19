@@ -12,6 +12,10 @@ const NativeShare = plugin('Share');
 const NativeFS = plugin('Filesystem');
 // 앱 안의 플러그인(android/.../HealthConnectPlugin.kt): 운동 기록을 헬스 커넥트(삼성 헬스 연동)에 쓰기
 export const NativeHealth = Capacitor.getPlatform() === 'android' ? plugin('HealthConnect') : null;
+// 하루 목표 알림(@capacitor/local-notifications): 앱이 꺼져 있어도 정한 시각에 알림
+export const NativeNotify = plugin('LocalNotifications');
+// 앱 안의 플러그인(android/.../CameraInfoPlugin.kt): 카메라마다 시야각(렌즈 초점거리·센서 크기로 계산)
+export const NativeCameraInfo = Capacitor.getPlatform() === 'android' ? plugin('CameraInfo') : null;
 
 /** 백업 파일을 공유 창으로 내보내기 (구글 드라이브·내 파일·카톡 등으로 저장) */
 export async function shareTextFile(name, text) {

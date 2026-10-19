@@ -5,14 +5,15 @@ import { editRecordedSet } from './session-edit.js';
 import { icon } from './icons.js';
 import { Tracker } from './engine/tracker.js';
 import { isHandsUp } from './engine/features.js';
-import { EXERCISE_BY_ID } from './engine/exercises.js';
+import { EXERCISE_BY_ID, closeOK } from './engine/exercises.js';
 import { summarize as tempoSummary, speeds as tempoSpeeds } from './engine/tempo.js';
 import { createPoseLandmarker, BONES, JOINTS } from './pose.js';
 import { Voice, nativeKorean } from './voice.js';
 import { TiltSensor } from './tilt.js';
 import { DiagRecorder, corrections } from './diag.js';
-import { openCamera, widenCamera, cameraSummary } from './camera.js';
+import { openCamera, widenCamera, cameraSummary, cameraOptions } from './camera.js';
 import { framingIssue, exerciseFraming, FramingGuide } from './framing.js';
+import { NativeCameraInfo } from './native.js';
 import { PlanRunner, isHold, isTimer, isTimed, TIMER_STEPS, PLAN_META, weightStep } from './routine.js';
 import { loadDemos, playDemo, hasDemo } from './demo.js';
 import * as store from './store.js';
@@ -20,6 +21,10 @@ import { esc } from './format.js';
 
 const $ = (id) => document.getElementById(id);
 const exName = (id) => EXERCISE_BY_ID[id]?.name ?? id;
+// 운동 안내 한마디: 루틴(그 운동만 셈)에선 골라서 할 때 문구(예: 스쿼트는 허리까지만 보여도 됨)
+// 자리 잡기에서 '통과'로 보는 가벼운 안내: 발끝(하체 운동이면 더 잘 셈)·자동에서 무릎(하체 운동일 때만)·가까운 화면 스쿼트의 무릎
+const SOFT_FRAME = new Set(['feet', 'kneesAuto', 'kneesSoft']);
+const tipOf = (id) => EXERCISE_BY_ID[id]?.tipFixed ?? EXERCISE_BY_ID[id]?.tip ?? '';
 const fmtMinSec = (sec) => (sec < 60 ? `${sec}초` : `${Math.floor(sec / 60)}분${sec % 60 ? ` ${sec % 60}초` : ''}`);
 const fmtClock = (sec) => {
   const s = Math.max(0, Math.floor(sec));
@@ -192,6 +197,11 @@ export class Workout {
     try {
       await this._openSource(source, st);
       if (this.session !== startingSession) return;
+      // 후면 카메라: 화면이 반대쪽이라 숫자를 볼 수 없다 → 소리는 꼭 켠다
+      if (!source && this.camInfo?.facing === 'environment' && !this.voice.enabled) {
+        this.voice.enabled = true;
+        this.el.voiceBtn.textContent = '🔊';
+      }
       const key = `${st.model}-${st.gpu ? 'auto' : 'CPU'}`;
       if (st.gpu && !landmarkers[key]) guard('starting');
       landmarkers[key] ||= await createPoseLandmarker({
@@ -217,13 +227,18 @@ export class Workout {
     else this._schedule();
     this.ticker = setInterval(() => this._tick(), 250);
     this._hud();
-    if (!this.isFile) this.voice.say(this._framingOptions(this.tracker.snapshot()).upperBody
-      ? '카메라에 상체와 움직이는 팔 전체가 들어오도록 자리 잡아 주세요.' : '카메라에 전신이 들어오도록 자리 잡아 주세요.');
+    if (!this.isFile) {
+      if (this.camInfo?.facing === 'environment') this.voice.say('후면 카메라예요. 폰 뒷면이 나를 보게 세워 주세요.');
+      const fo = this._framingOptions(this.tracker.snapshot());
+      this.voice.say(fo.closeSquat ? '카메라에 머리부터 허리까지 들어오도록 자리 잡아 주세요. 무릎까지 보이면 자세 교정도 해요.'
+        : fo.auto ? '카메라에 상체가 들어오도록 자리 잡아 주세요. 하체 운동이면 무릎까지 보이게 해 주세요.'
+          : fo.upperBody ? '카메라에 상체와 움직이는 팔 전체가 들어오도록 자리 잡아 주세요.' : '카메라에 전신이 들어오도록 자리 잡아 주세요.');
+    }
   }
 
   _prepareHUD() {
     const now=performance.now(), snap=this.tracker.snapshot(), frame=this._framing(snap);
-    const good=snap.present && (!frame || frame.code==='feet');
+    const good=snap.present && (!frame || SOFT_FRAME.has(frame.code));
     if(good) this.readySince ??= now; else this.readySince=null;
     this.ready=good && now-this.readySince>=600;
     this.el.screen.dataset.phase=this.phase;
@@ -231,7 +246,9 @@ export class Workout {
     $('wo-subheading').textContent=this.plan ? this.session.plan.name : this.session.candidates?.length ? this.session.candidates.map(exName).join(' · ') : '자유 운동';
     this.el.plan.hidden=true;this.el.next.hidden=true;
     this.el.dot.className=`dot ${this.ready?'ok':'warn'}`;
-    this.el.status.textContent=this.ready ? (frame?'자세를 확인했어요':this._framingOptions(snap).upperBody?'팔과 상체가 보여요':'전신이 보여요') : '촬영 위치를 확인해 주세요';
+    // 폰 기울기도 보여 준다: 바닥에 두고 뒤로 20° 정도 기울이면 가까이 둬도 된다(기울기는 자동 보정)
+    const tilt=Number.isFinite(this.lastTiltDeg) && Math.abs(this.lastTiltDeg)>=3 ? ` · 폰 기울기 ${this.lastTiltDeg}°` : '';
+    this.el.status.textContent=(this.ready ? (frame?'자세를 확인했어요':this._framingOptions(snap).upperBody?'팔과 상체가 보여요':'전신이 보여요') : '촬영 위치를 확인해 주세요')+tilt;
     this.el.framing.hidden=!frame;this.el.framing.textContent=frame?.text||'';
     this.el.frame.hidden=false;this.el.frame.className=`wo-frame ${good?'ok':'bad'}`;
     this.primary.disabled=!this.ready || this.phase==='countdown' || this.switchingCamera;
@@ -483,7 +500,7 @@ export class Workout {
     if (n === 0 && !pt.reminded && now - pt.readyAt > 45000) {
       pt.reminded = true;
       const it = this.plan.item;
-      this.voice.say(`${exName(it.exercise)} ${this._targetWords(it)} 시작하세요. ${EXERCISE_BY_ID[it.exercise]?.tip ?? ''}`);
+      this.voice.say(`${exName(it.exercise)} ${this._targetWords(it)} 시작하세요. ${tipOf(it.exercise)}`);
     }
   }
 
@@ -567,7 +584,7 @@ export class Workout {
     if (res.rest > 0) {
       msg += ` ${res.rest}초 쉬세요.`;
       msg += isTimer(nx) ? ` 다음은 ${nx.name}.`
-        : res.exerciseDone ? ` 다음은 ${exName(nx.exercise)} ${this._targetWords(nx)} ${nx.sets}세트. ${EXERCISE_BY_ID[nx.exercise]?.tip ?? ''}`
+        : res.exerciseDone ? ` 다음은 ${exName(nx.exercise)} ${this._targetWords(nx)} ${nx.sets}세트. ${tipOf(nx.exercise)}`
           : ` 다음은 ${this.plan.setNo}세트, ${this._targetWords(nx)}.`;
     }
     this.voice.say(msg);
@@ -593,7 +610,7 @@ export class Workout {
     if (early || isTimer(it)) return; // 준비운동·마무리는 _ptTimerTick 이 안내
     this.voice.beep(660, 0.25);
     const newEx = this.plan.setNo === 1;
-    const tip = newEx ? ` ${EXERCISE_BY_ID[it.exercise]?.tip ?? ''}` : '';
+    const tip = newEx ? ` ${tipOf(it.exercise)}` : '';
     if (isTimed(it)) { this.voice.say(`${exName(it.exercise)} ${this.plan.setNo}세트, ${it.workSec}초.`); return; }
     this.voice.say(`${exName(it.exercise)} ${this.plan.setNo}세트, ${this._targetWords(it)} 시작하세요.${tip}`);
   }
@@ -618,7 +635,7 @@ export class Workout {
     this.pt.readyAt = performance.now();
     const it = this.plan.item;
     if (isTimer(it)) this.voice.say(`다음, ${it.name}`, { interrupt: true });
-    else this.voice.say(`다음 운동, ${exName(it.exercise)} ${this._targetWords(it)} ${it.sets}세트. ${EXERCISE_BY_ID[it.exercise]?.tip ?? ''}`, { interrupt: true });
+    else this.voice.say(`다음 운동, ${exName(it.exercise)} ${this._targetWords(it)} ${it.sets}세트. ${tipOf(it.exercise)}`, { interrupt: true });
     this._hud();
   }
 
@@ -672,6 +689,7 @@ export class Workout {
       if(this.session!==openingSession){stream.getTracks().forEach(t=>t.stop());throw Object.assign(new Error('카메라 준비 취소'),{name:'AbortError'});}
       this.stream = stream;
       this.camInfo = info;
+      await this._widestFront(st);
       this.el.camera.textContent = cameraSummary(this.camInfo);
       this.el.camera.hidden = false;
       // 거울 보기는 나를 비추는(전면) 카메라일 때만
@@ -686,6 +704,30 @@ export class Workout {
       v.onerror = () => rej(new Error('영상을 열 수 없어요'));
     });
     if (!source) await v.play().catch(() => {});
+  }
+
+  /**
+   * 카메라를 따로 고른 적 없으면(전면 기본) 한 번만: 시야가 더 넓은 전면 카메라가 있으면 그걸로 바꾸고 기억한다.
+   * 폰이 '전면 광각'을 따로 된 카메라로 보여 주는 경우 — 줌으로는 1배 아래로 못 가니 카메라를 바꿔야 넓어진다.
+   */
+  async _widestFront(st) {
+    if (!NativeCameraInfo || st.cameraId || st.cameraChecked) return;
+    store.setSetting('cameraChecked', true);
+    let opts = [];
+    try { opts = await cameraOptions({ probe: false }); } catch { return; }
+    const cur = opts.find((c) => c.label === this.camInfo.label);
+    const best = opts.filter((c) => c.facing === 'user' && c.fovLong).sort((a, b) => b.fovLong - a.fovLong)[0];
+    if (cur) this.camInfo.fovLong = cur.fovLong;
+    if (!best || !cur || best.deviceId === cur.deviceId || best.fovLong - (cur.fovLong ?? 0) <= 8) return;
+    try {
+      const s2 = await openCamera({ ...st, cameraId: best.deviceId });
+      this.stream.getTracks().forEach((t) => t.stop());
+      this.stream = s2;
+      this.camInfo = { ...(await widenCamera(this.stream, st.cameraWide)), fovLong: best.fovLong };
+      store.setSetting('cameraId', best.deviceId);
+      store.setSetting('cameraLabel', `${best.name} · 시야 ${best.fovLong}°`);
+      this.voice.say('더 넓게 보이는 전면 광각 카메라로 바꿨어요.');
+    } catch { /* 그 카메라를 못 열면 원래 카메라 그대로 */ }
   }
 
   _fail(e) {
@@ -936,10 +978,10 @@ export class Workout {
       if (!snap.present) message = '사람이 안 보이는 구간';
     } else if (!snap.present) {
       status = snap.raw ? '몸이 덜 보여요' : '사람을 찾는 중';
-      message = frame?.text || '전신이 보이게 2~3m 뒤로 가 주세요';
+      message = frame?.text || '하려는 운동이 다 보이게 서 주세요 (어디에 둘지는 홈 → 폰은 어디에 둘까요?)';
     } else {
       status = '인식 중';
-      dot = shown && shown.code !== 'feet' ? 'warn' : 'ok';
+      dot = shown && !SOFT_FRAME.has(shown.code) ? 'warn' : 'ok';
       message = frame?.text || '';
     }
     this.el.dot.className = `dot ${dot}`;
@@ -1108,7 +1150,7 @@ export class Workout {
       count.classList.remove('tentative', 'done');
       count.classList.add('rest');
       this.el.target.hidden = true;
-      const tip = pl.setNo === 1 && !isTimer(it) ? EXERCISE_BY_ID[it.exercise]?.tip : '';
+      const tip = pl.setNo === 1 && !isTimer(it) ? tipOf(it.exercise) : '';
       const g = this.gesture && !this.gesture.done ? `🙌 ${Math.max(0, 2 - (now - this.gesture.since) / 1000).toFixed(1)}초 더 들고 있으면 휴식 끝` : '';
       this._setText('message', g || (tip ? `📱 ${tip}` : isTimer(it) ? '쉬고 나면 시간에 맞춰 안내해요' : '바로 시작하거나 두 손을 머리 위로 2초 들면 휴식 끝'));
       const html = isTimer(it) ? `다음: <b>${esc(name)} ${this._targetWords(it)}</b>`
@@ -1173,14 +1215,18 @@ export class Workout {
 
   // 자리 잡기: 첫 세트 전(루틴은 운동이 바뀔 때마다) 화면 테두리 색으로 구도를 알려준다.
   // 주황 = 몸이 덜 보임(이유는 화면·음성 안내), 1.5초 동안 잘 보이면 초록 + "좋아요" 한 번, 2.5초 뒤 사라짐
+  // 운동 중(세는 중·인터벌 진행 중)인가: 자리 잡기 안내는 그 전까지만 (앉을 때 엉덩이가 잠깐 화면 밖으로 나가도 잔소리 안 함)
+  _busy(snap) {
+    return snap.state !== 'search' || !!(this.plan && this.pt?.stage === 'work'
+      && (this._ptCount(snap) > 0 || (isTimed(this.plan.item) && this.pt.workEnd != null)));
+  }
+
   _frameCheck(snap, frame, now) {
     const el = this.el.frame;
-    const busy = snap.state !== 'search' || (this.plan && this.pt?.stage === 'work'
-      && (this._ptCount(snap) > 0 || (isTimed(this.plan.item) && this.pt.workEnd != null)));
-    if (this.isFile || busy || (this.frameOkAt && now - this.frameOkAt > 2500)) { el.hidden = true; return; }
+    if (this.isFile || this._busy(snap) || (this.frameOkAt && now - this.frameOkAt > 2500)) { el.hidden = true; return; }
     el.hidden = false;
     if (this.frameOkAt) { el.className = 'wo-frame ok'; return; }
-    const good = snap.present && (!frame || frame.code === 'feet');
+    const good = snap.present && (!frame || SOFT_FRAME.has(frame.code));
     if (good) {
       this.frameGoodSince ??= now;
       if (now - this.frameGoodSince > 1500) {
@@ -1191,12 +1237,30 @@ export class Workout {
     el.className = `wo-frame ${good ? 'ok' : 'bad'}`;
   }
 
+
   // 화면 구도: 안 보이는 부위에 따라 어떻게 하면 되는지. speak = 소리로도 알려줄 만큼 중요한지
   _framingOptions(snap) {
-    const ex = EXERCISE_BY_ID[this.tracker.o.fixed || snap.exercise];
+    const fixed = this.tracker.o.fixed;
+    const ex = EXERCISE_BY_ID[fixed || snap.exercise || snap.pending?.exercise];
+    // 스쿼트를 골라서 할 때(가까운 화면 신호): 서 있을 때 허리까지만 보이면 센다 → 무릎을 요구하지 않는다
+    if (fixed && closeOK(fixed)) return { ...exerciseFraming(ex), upperBody: true, requireArms: false, bothArms: false, closeSquat: true };
+    // 자동 인식에서 아직 무슨 운동인지 모르면 상체 기준으로 너그럽게 (하체 운동이면 무릎까지는 글로만 알림)
+    if (!ex) return { ...exerciseFraming(null), upperBody: true, requireArms: false, auto: true };
     return exerciseFraming(ex);
   }
-  _framing(snap) { return framingIssue(snap, this._framingOptions(snap)); }
+  _framing(snap) {
+    const o = this._framingOptions(snap);
+    const issue = framingIssue(snap, o);
+    if (issue || !snap.raw) return issue;
+    const s = snap.raw.seen || {};
+    if (o.auto && !s.knees) return { code: 'kneesAuto', text: '상체 운동은 이대로 돼요 · 하체 운동이면 무릎까지 보이게', speak: false };
+    // 가까운 화면 스쿼트: 자리 잡을 때만(앉으면 엉덩이가 잠깐 화면 밖으로 나가는 건 정상)
+    if (o.closeSquat && this.phase === 'prepare') {
+      if (!s.hips) return { code: 'hips', text: '허리까지 보이게 반 걸음 뒤로 가 주세요', speak: true };
+      if (!s.knees) return { code: 'kneesSoft', text: '이대로 세요 · 무릎까지 보이면 자세 교정도 해요', speak: false };
+    }
+    return null;
+  }
 
   // 구도 안내 음성: 첫 세트를 기록하기 전(자리 잡는 중)에만, 3초 넘게 계속될 때, 같은 말은 두 번까지, 12초 간격
   _sayFraming(frame, now) {
@@ -1212,8 +1276,10 @@ export class Workout {
 
   // 폰 기울기 센서로 3D 좌표를 바로 세운다 (1.5° 넘게 바뀔 때만 — 세트 중 판정이 흔들리지 않게)
   _applyTilt(now) {
-    const up = this.tilt.cameraUp();
+    let up = this.tilt.cameraUp();
     if (!up) return;
+    // 후면 카메라는 화면 반대쪽을 본다: 폰을 뒤로 기울이면 전면은 위를, 후면은 아래를 본다 → 앞뒤(z) 반대
+    if (this.camInfo?.facing === 'environment') up = [up[0], up[1], -up[2]];
     const p = this.appliedUp;
     if (p && up[0] * p[0] + up[1] * p[1] + up[2] * p[2] > Math.cos((1.5 * Math.PI) / 180)) return;
     this.appliedUp = up;

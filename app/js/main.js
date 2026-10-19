@@ -7,11 +7,13 @@ import { editRecordedSet, postureFeedback, assessment } from './session-edit.js'
 import { Workout, GPU_GUARD } from './workout.js';
 import { renderHistory } from './history.js';
 import { esc, exName, DAYS, fmtDate, fmtTime, minutes, setValue, sessionTotals, sessionLine } from './format.js';
-import { isNative, NativeApp, NativeTTS, NativeHealth, canShareFile, shareTextFile, shareBinaryFile } from './native.js';
+import { isNative, NativeApp, NativeTTS, NativeHealth, NativeCameraInfo, canShareFile, shareTextFile, shareBinaryFile } from './native.js';
 import { toHealthRecord, healthEligible } from './health.js';
 import { corrections } from './diag.js';
+import { GOAL_DEFAULT, hasGoal, progress, streak, remainingRoutine, goalText, leftText } from './goal.js';
+import { canRemind, notifyPermission, syncReminders, testReminder, onReminderTap } from './reminders.js';
 import { summarize as tempoSummary, speeds as tempoSpeeds } from './engine/tempo.js';
-import { listCameras, cameraNames } from './camera.js';
+import { cameraOptions, placementTable, TYPICAL_FOV } from './camera.js';
 import { loadDemos, playDemo, hasDemo } from './demo.js';
 import { generateRoutine, routineMinutes, defaultItem, isHold, isTimer, isTimed, timerItem, TIMER_NAME, PLAN_META, FOCUS, EQUIPMENT, LEVELS } from './routine.js';
 
@@ -65,6 +67,7 @@ function renderHome() {
   $('routine-sub').textContent = draft?.items?.length
     ? `${draft.items.filter((it) => !isTimer(it)).length}가지 운동 · 약 ${routineMinutes(draft.items)}분`
     : '목표에 맞춰 순서대로 운동하기';
+  $('goal-card').innerHTML = goalCardHtml();
   const recent = store.sessions().slice(0, 1);
   $('recent-list').innerHTML = recent.length ? recent.map((sess) => {
     const tot = sessionTotals(sess);
@@ -76,6 +79,239 @@ function renderHome() {
 document.addEventListener('click', (e) => {
   const it = e.target.closest('[data-session]');
   if (it) openSummary(it.dataset.session, false);
+});
+
+/* ---------- 하루 목표 ---------- */
+const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
+const goalStep = (id) => (isHold(id) ? 10 : 5);
+
+function goalCardHtml() {
+  const g = store.goal();
+  if (!hasGoal(g)) {
+    return `<div class="card goal-card goal-empty"><div><b>하루 목표</b>
+      <div class="muted small">정해 두면 못 채운 날 정한 시각에 알려드려요</div></div>
+      <button class="btn btn-secondary" id="btn-goal-edit" type="button">목표 정하기</button></div>`;
+  }
+  const now = Date.now();
+  const p = progress(g, store.sessions(), now);
+  const st = streak(g, store.sessions(), now);
+  const bar = (pct) => `<span class="grp-bar"><i style="width:${Math.round(pct * 100)}%"></i></span>`;
+  const rows = p.items.map((x) => `<div class="goal-row${x.left ? '' : ' done'}"><span class="goal-name">${esc(exName(x.exercise))}</span>
+    ${bar(x.pct)}<span class="goal-val">${x.done}/${x.amount}${x.unit}${x.left ? '' : ' ✓'}</span></div>`);
+  if (p.minutes) {
+    rows.push(`<div class="goal-row${p.minutes.left ? '' : ' done'}"><span class="goal-name">운동 시간</span>
+      ${bar(Math.min(1, p.minutes.done / p.minutes.target))}<span class="goal-val">${p.minutes.done}/${p.minutes.target}분${p.minutes.left ? '' : ' ✓'}</span></div>`);
+  }
+  const items = remainingRoutine(p);
+  const min = routineMinutes(items);
+  const head = p.met ? '✓ 오늘 목표 달성!' : p.goalDay ? '오늘 목표' : '오늘은 쉬는 날';
+  const go = p.met || !items.length ? ''
+    : `<button class="btn btn-primary" id="btn-goal-go" type="button">남은 목표 하기${min ? ` · 약 ${min}분` : ''}</button>`;
+  const times = [g.remind, g.lastCall].filter(Boolean);
+  const note = !canRemind ? '알림은 안드로이드 앱에서만 와요. 웹에선 여기서 남은 양을 확인하세요'
+    : !p.goalDay ? '쉬는 날이라 알림이 없어요'
+      : p.met ? '오늘은 알림이 없어요. 내일도 화이팅!'
+        : times.length ? `${times.join(' · ')}까지 못 채우면 알려드려요` : '알림은 꺼 뒀어요';
+  // 7일 연속으로 채웠으면 목표를 조금 올려 보자고 (한 번 물으면 7일 동안 다시 안 물음)
+  const bump = p.met && st >= 7 && !(g.bumpAskedAt && now - g.bumpAskedAt < 7 * 86400000)
+    ? `<div class="goal-bump">🔥 ${st}일 연속 달성! 목표를 10% 올려 볼까요?
+        <span class="btn-row"><button class="btn btn-secondary" id="btn-goal-bump" type="button">올리기</button>
+        <button class="btn btn-ghost" id="btn-goal-nobump" type="button">지금이 좋아요</button></span></div>` : '';
+  return `<div class="card goal-card${p.met ? ' met' : ''}">
+    <div class="goal-head"><b>${head}</b>${st ? `<span class="goal-streak">🔥 ${st}일 연속</span>` : ''}</div>
+    ${rows.join('')}${bump}
+    <div class="goal-actions">${go}<button class="btn btn-ghost" id="btn-goal-edit" type="button">바꾸기</button></div>
+    <div class="muted small">${note}</div></div>`;
+}
+
+let goalDraft = null;
+function openGoal() {
+  goalDraft = JSON.parse(JSON.stringify(store.goal() || GOAL_DEFAULT));
+  goalDraft.on = true;
+  push('screen-goal', renderGoal);
+}
+
+function renderGoal() {
+  const g = goalDraft;
+  const row = (l, d, ctl, stacked) => `<div class="setting${stacked ? ' stacked' : ''}"><div><div class="l">${l}</div>${d ? `<div class="d">${d}</div>` : ''}</div>${ctl}</div>`;
+  const exOpts = (sel) => GROUPS.map((gr) => `<optgroup label="${gr}">${EXERCISES.filter((e) => e.group === gr)
+    .map((e) => `<option value="${e.id}" ${e.id === sel ? 'selected' : ''}>${esc(e.name)}</option>`).join('')}</optgroup>`).join('');
+  const items = g.items.map((x, i) => `<div class="goal-edit-row">
+      <select data-gi-ex="${i}" aria-label="운동">${exOpts(x.exercise)}</select>
+      <div class="stepper"><button type="button" class="mini-btn" data-gi-step="${i}" data-d="-1" aria-label="줄이기">−</button>
+        <input type="number" inputmode="numeric" min="1" max="2000" data-gi-amt="${i}" value="${x.amount}" aria-label="목표">
+        <span class="unit">${isHold(x.exercise) ? '초' : '회'}</span>
+        <button type="button" class="mini-btn" data-gi-step="${i}" data-d="1" aria-label="늘리기">+</button></div>
+      <button type="button" class="icon-btn gi-del" data-gi-del="${i}" aria-label="빼기">×</button></div>`).join('');
+  const minSeg = `<div class="seg" data-goal-seg="minutes">${[[0, '안 씀'], [10, '10분'], [20, '20분'], [30, '30분'], [45, '45분'], [60, '1시간']]
+    .map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${g.minutes === v}">${l}</button>`).join('')}</div>`;
+  const days = DAY_NAMES.map((d, i) => `<button type="button" class="chip" data-goal-day="${i}" aria-pressed="${g.days.includes(i)}">${d}</button>`).join('');
+  const time = (k, label, desc) => row(label, desc, `<span class="time-ctl">
+      <input type="time" data-goal-time="${k}" value="${esc(g[k] || (k === 'remind' ? '20:00' : '22:00'))}" ${g[k] ? '' : 'disabled'}>
+      <label class="switch"><input type="checkbox" data-goal-time-on="${k}" ${g[k] ? 'checked' : ''}><span></span></label></span>`);
+  $('goal-body').innerHTML = `
+    <div class="card">${row('하루 목표 쓰기', '끄면 홈 카드와 알림이 사라져요', `<label class="switch"><input type="checkbox" id="goal-on" ${g.on ? 'checked' : ''}><span></span></label>`)}</div>
+    <h2 class="section-title">운동별 목표 (하루 합계)</h2>
+    <div class="card goal-edit">${items || '<p class="muted" style="margin:4px 0">운동을 추가해 주세요</p>'}
+      <button class="btn btn-ghost" id="btn-gi-add" type="button">+ 운동 추가</button>
+      <p class="muted small" style="margin:6px 0 0">여러 번 나눠서 해도 하루 합계로 세요. 버티기(플랭크 등)는 초</p></div>
+    <h2 class="section-title">운동 시간 (선택)</h2>
+    <div class="card">${minSeg}<p class="muted small" style="margin:8px 0 0">운동 화면을 켜 둔 시간(쉬는 시간 포함)으로 세요</p></div>
+    <h2 class="section-title">목표가 있는 요일</h2>
+    <div class="card"><div class="chips">${days}</div>
+      <p class="muted small" style="margin:8px 0 0">빠진 요일은 쉬는 날: 알림이 없고 연속 기록도 안 끊겨요</p></div>
+    <h2 class="section-title">못 채웠을 때 알림</h2>
+    <div class="card">
+      ${time('remind', '첫 알림', '이 시각까지 목표를 못 채웠으면')}
+      ${time('lastCall', '마지막 알림', '그래도 아직이면 한 번 더')}
+      <p class="muted small" id="goal-perm" style="margin:6px 0">${canRemind ? '알림 권한 확인 중…' : '알림은 안드로이드 앱에서만 와요. 웹에선 앱을 열면 홈에서 남은 양을 보여 드려요'}</p>
+      ${canRemind ? '<button class="btn btn-secondary" id="btn-goal-test" type="button">알림 시험 (5초 뒤 한 번)</button>' : ''}
+    </div>`;
+  if (canRemind) {
+    notifyPermission().then((st) => {
+      const el = $('goal-perm');
+      if (!el) return;
+      el.textContent = st === 'granted' ? '알림이 허용돼 있어요. 몇 분 늦게 올 수 있어요(배터리 절약)'
+        : st === 'denied' ? '알림이 꺼져 있어요 → 폰 설정 → 애플리케이션 → 핸즈프리PT → 알림을 켜 주세요'
+          : '저장하면 알림을 보내도 될지 물어봐요';
+    });
+  }
+}
+
+$('goal-body').addEventListener('click', async (e) => {
+  const g = goalDraft;
+  const step = e.target.closest('[data-gi-step]');
+  if (step) {
+    const it = g.items[Number(step.dataset.giStep)];
+    const d = goalStep(it.exercise) * Number(step.dataset.d);
+    it.amount = Math.max(1, Math.min(2000, (it.amount || 0) + d));
+    renderGoal();
+    return;
+  }
+  const del = e.target.closest('[data-gi-del]');
+  if (del) { g.items.splice(Number(del.dataset.giDel), 1); renderGoal(); return; }
+  if (e.target.closest('#btn-gi-add')) {
+    const used = new Set(g.items.map((x) => x.exercise));
+    const next = ['squat', 'pushup', 'plank', 'lunge', 'situp', 'jumpingjack', 'curl'].find((id) => !used.has(id)) || 'squat';
+    g.items.push({ exercise: next, amount: isHold(next) ? 60 : 20 });
+    renderGoal();
+    return;
+  }
+  const seg = e.target.closest('[data-goal-seg] button');
+  if (seg) { g.minutes = Number(seg.dataset.v); renderGoal(); return; }
+  const day = e.target.closest('[data-goal-day]');
+  if (day) {
+    const n = Number(day.dataset.goalDay);
+    g.days = g.days.includes(n) ? g.days.filter((x) => x !== n) : [...g.days, n].sort();
+    renderGoal();
+    return;
+  }
+  if (e.target.closest('#btn-goal-test')) {
+    const ok = await testReminder(5);
+    toast(ok ? '5초 뒤에 알림이 와요. 화면을 꺼 두고 기다려 보세요' : '알림을 허용해야 받을 수 있어요');
+  }
+});
+$('goal-body').addEventListener('change', (e) => {
+  const g = goalDraft;
+  const ex = e.target.closest('[data-gi-ex]');
+  if (ex) {
+    const it = g.items[Number(ex.dataset.giEx)];
+    const wasHold = isHold(it.exercise);
+    it.exercise = ex.value;
+    if (wasHold !== isHold(it.exercise)) it.amount = isHold(it.exercise) ? 60 : 20;
+    renderGoal();
+    return;
+  }
+  const amt = e.target.closest('[data-gi-amt]');
+  if (amt) { g.items[Number(amt.dataset.giAmt)].amount = Math.max(1, Math.min(2000, Math.round(Number(amt.value) || 1))); return; }
+  if (e.target.id === 'goal-on') { g.on = e.target.checked; return; }
+  const t = e.target.closest('[data-goal-time]');
+  if (t && t.value) { g[t.dataset.goalTime] = t.value; return; }
+  const on = e.target.closest('[data-goal-time-on]');
+  if (on) {
+    const k = on.dataset.goalTimeOn;
+    g[k] = on.checked ? (document.querySelector(`[data-goal-time="${k}"]`)?.value || (k === 'remind' ? '20:00' : '22:00')) : '';
+    renderGoal();
+  }
+});
+$('btn-goal-save').addEventListener('click', async () => {
+  const g = goalDraft;
+  g.items = g.items.filter((x) => x.amount > 0 && EXERCISE_BY_ID[x.exercise]);
+  // 같은 운동을 두 줄로 넣었으면 합친다
+  const merged = new Map();
+  for (const x of g.items) merged.set(x.exercise, (merged.get(x.exercise) || 0) + x.amount);
+  g.items = [...merged].map(([exercise, amount]) => ({ exercise, amount }));
+  if (g.on && !g.days.length) { toast('목표가 있는 요일을 하루 이상 골라 주세요'); return; }
+  store.setGoal(g);
+  let msg = hasGoal(g) ? `하루 목표: ${goalText(g)}` : '하루 목표를 껐어요';
+  if (hasGoal(g) && canRemind && (g.remind || g.lastCall)) {
+    const perm = await notifyPermission({ ask: true });
+    if (perm !== 'granted') msg = '목표를 저장했어요. 알림을 받으려면 알림을 허용해 주세요';
+  }
+  await syncReminders();
+  toast(msg, 3200);
+  back();
+});
+
+// 홈 카드 버튼들
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#btn-goal-edit')) { openGoal(); return; }
+  if (e.target.closest('#btn-goal-go')) {
+    const p = progress(store.goal(), store.sessions());
+    const items = remainingRoutine(p);
+    if (items.length) workout.start({ plan: { name: '오늘 목표', items } });
+    return;
+  }
+  if (e.target.closest('#btn-goal-bump') || e.target.closest('#btn-goal-nobump')) {
+    const g = { ...store.goal(), bumpAskedAt: Date.now() };
+    if (e.target.closest('#btn-goal-bump')) {
+      g.items = g.items.map((x) => ({ ...x, amount: Math.ceil((x.amount * 1.1) / 5) * 5 }));
+      if (g.minutes) g.minutes = Math.ceil((g.minutes * 1.1) / 5) * 5;
+      toast(`새 목표: ${goalText(g)}`);
+    }
+    store.setGoal(g);
+    syncReminders();
+    renderHome();
+  }
+});
+
+/* ---------- 폰은 어디에 둘까요 (카메라 거리 안내) ---------- */
+// 카메라를 가까이 두려면 '어디에 두느냐'가 크다: 바닥에 똑바로 세우면 머리까지 담으려고 멀리 가야 한다.
+// 거리는 카메라 시야각으로 계산(camera.js placementDistance) — 안드로이드 앱이면 이 폰 렌즈 값, 아니면 보통 폰 값
+async function showPlacementHelp() {
+  let front = null, rear = null;
+  if (NativeCameraInfo) {
+    try {
+      const cams = (await NativeCameraInfo.listCameras()).cameras || [];
+      const widest = (side) => cams.filter((c) => c.facing === side && Number.isFinite(c.fovLong)).sort((a, b) => b.fovLong - a.fovLong)[0];
+      front = widest('front');
+      rear = widest('back');
+    } catch { /* 모르면 보통 폰 값 */ }
+  }
+  const fov = front ? Math.round(front.fovLong) : TYPICAL_FOV;
+  const rows = placementTable(fov);
+  const m = (v) => (v == null ? '–' : `${v}m`);
+  const rearFov = rear ? Math.round(rear.fovLong) : null;
+  const rearRows = rearFov && rearFov - fov > 15 ? placementTable(rearFov) : null;
+  const d = $('dialog');
+  d.onclose = null;
+  d.innerHTML = `<form method="dialog" class="place-help"><h3>폰은 어디에 둘까요?</h3>
+    <p class="muted small" style="margin-top:0">${front ? `이 폰 전면 카메라(시야 ${fov}°)` : `보통 폰 전면 카메라(시야 약 ${fov}°)`} 기준, 키 175cm 가 다 들어오는 가장 가까운 거리예요.</p>
+    <table class="place-table"><thead><tr><th>두는 곳</th><th>전신</th><th>무릎까지<span>스쿼트·런지</span></th><th>상체만<span>컬·레이즈</span></th></tr></thead>
+    <tbody>${rows.map((r) => `<tr class="${r.key === 'floor' ? 'worst' : ''}"><td><b>${r.name}</b><span>${r.sub}</span></td>
+      <td>${m(r.full)}</td><td>${m(r.knees)}</td><td>${m(r.upper)}</td></tr>`).join('')}</tbody></table>
+    <ul class="feedback">
+      <li><b>폰 높이는 보여야 할 부분의 가운데</b>일 때 가장 가까워요 — 전신은 허리, 상체 운동은 가슴 높이</li>
+      <li>바닥에 둘 땐 <b>뒤로 20° 정도 기울여</b> 위를 보게 하세요. 기울기는 앱이 센서로 자동 보정해요(발끝이 잘리지 않게만)</li>
+      <li>상체 운동(컬·레이즈·프레스 등)은 허리까지만 보이면 돼요. 누워서·엎드려 하는 운동은 폰을 가로로 눕혀 옆에서</li>
+      <li><b>스쿼트를 골라서 할 땐</b>(오늘의 루틴·하루 목표) 허리까지만 보여도 세요 — '상체만' 칸 거리. 무릎까지 보이면 자세 교정도 해요</li>
+      ${rearRows ? `<li><b>후면 초광각(시야 ${rearFov}°)</b>으로 바꾸면 탁자 위 ${m(rearRows[0].full)} · 바닥+20° ${m(rearRows[1].full)}. 화면은 반대쪽이지만 숫자는 소리로 세요(설정 → 카메라 찾기)</li>` : ''}
+    </ul>
+    <div class="btn-row"><button value="ok" class="btn btn-primary">알겠어요</button></div></form>`;
+  d.showModal();
+}
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#btn-place-help')) showPlacementHelp();
 });
 
 /* ---------- 운동 고르기 ---------- */
@@ -138,6 +374,7 @@ const workout = new Workout({
   onDone: (sess) => {
     if (sess) openSummary(sess.id, true);
     else { toast('기록된 세트가 없어요'); go('home'); }
+    syncReminders();
   },
 });
 document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => {
@@ -538,6 +775,7 @@ $('btn-delete-session').addEventListener('click', async () => {
   if (!curSession) return;
   if (!(await confirmDialog('이 운동 기록을 지울까요?', '지운 기록은 되돌릴 수 없어요.', '지우기'))) return;
   store.deleteSession(curSession.id);
+  syncReminders();
   if (curSession.health && NativeHealth) NativeHealth.deleteWorkout({ id: curSession.id }).catch(() => {});
   toast(curSession.health && NativeHealth ? '기록을 지웠어요 (헬스 커넥트에서도)' : '기록을 지웠어요');
   go('home');
@@ -587,6 +825,7 @@ function editSet(setId) {
       store.upsertSession(s);
       d.close('deleted');
       renderSummary();
+      syncReminders();
       if (s.health) healthSave(s, { update: true });
     };
   }
@@ -602,6 +841,7 @@ function editSet(setId) {
     if (!hold && w != null) store.rememberWeight(ex, w);
     store.upsertSession(s);
     renderSummary();
+    syncReminders();
     if (s.health) healthSave(s, { update: true });
   };
   d.showModal();
@@ -683,9 +923,14 @@ function renderSettings() {
   const alerts = st.restAlerts || [];
   const chip = (v, l) => `<button type="button" class="chip" data-alert="${v}" aria-pressed="${alerts.includes(v)}">${l}</button>`;
   const camName = st.cameraId ? (st.cameraLabel || '고른 카메라') : '전면 기본';
+  // 넓게 보이는 순: 시야각(안드로이드 앱만 앎)·전신이 들어오는 가장 가까운 거리, 후면은 화면이 반대쪽이라 소리로 센다
   const camOpts = camList
-    ? [['', '전면 기본(자동)'], ...camList.map((c, i) => [c.id, cameraNames(camList)[i]])]
-      .map(([id, name]) => `<button type="button" class="chip" data-cam-id="${esc(id)}" data-cam-name="${esc(name)}" aria-pressed="${st.cameraId === id}">${esc(name)}</button>`).join('')
+    ? [{ deviceId: '', name: '전면 기본(자동)' }, ...camList].map((c) => {
+      const label = c.fovLong ? `${c.name} · 시야 ${c.fovLong}°` : c.name;
+      const sub = [c.distance ? `${c.distance}m부터` : '', c.facing === 'environment' ? '화면 반대쪽 · 소리로 셈' : ''].filter(Boolean).join(' · ');
+      return `<button type="button" class="chip cam-chip" data-cam-id="${esc(c.deviceId)}" data-cam-name="${esc(label)}" aria-pressed="${st.cameraId === c.deviceId}">
+        <b>${esc(label)}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</button>`;
+    }).join('')
     : '';
   $('settings-body').innerHTML = `
     <div class="card">
@@ -693,6 +938,11 @@ function renderSettings() {
       ${row('소리 확인', '운동 전에 한 번 들어보세요', '<button class="mini-btn" id="btn-voice-test" type="button">들어보기</button>')}
       ${row('숫자 읽기', '', seg('countStyle', [['native', '하나 둘 셋'], ['number', '일 이 삼']]))}
       ${row('자세 교정 음성', '같은 문제가 반복될 때만 짧게 말해요', sw('cues'))}
+    </div>
+    <h2 class="section-title">하루 목표·알림</h2>
+    <div class="card">
+      ${row('하루 목표', hasGoal(store.goal()) ? `${esc(goalText(store.goal()))}${[store.goal().remind, store.goal().lastCall].filter(Boolean).length ? ` · 알림 ${[store.goal().remind, store.goal().lastCall].filter(Boolean).join('·')}` : ''}` : '정해 두면 홈에 진행이 보이고, 못 채운 날 알려드려요',
+        '<button class="mini-btn" id="btn-goal-settings" type="button">바꾸기</button>', true)}
     </div>
     <h2 class="section-title">세트·휴식</h2>
     <div class="card">
@@ -709,10 +959,12 @@ function renderSettings() {
     </div>
     <h2 class="section-title">카메라</h2>
     <div class="card">
-      ${row('사용할 카메라', `지금: ${esc(camName)}. 자동 모드에서 넓게 보기를 켜면, 앱에서 확인할 수 있는 전면 광각을 우선 사용해요`,
+      ${row('폰은 어디에?', '바닥에 똑바로 세우면 머리까지 담으려고 멀리(2.7m) 가야 해요. 탁자 위나 바닥에서 뒤로 기울이면 1.5m 안팎',
+        '<button class="mini-btn" id="btn-place-help-settings" type="button">거리 보기</button>')}
+      ${row('사용할 카메라', `지금: ${esc(camName)}. 자동 모드에서 넓게 보기를 켜면 전면 광각을 우선 써요. 시야가 넓은 카메라일수록 가까이 둬도 돼요${NativeCameraInfo ? '' : ' (시야각은 안드로이드 앱에서 보여요)'}`,
         `<div class="cam-ctl"><button class="mini-btn" id="btn-cam-scan" type="button">${camList ? '다시 찾기' : '카메라 찾기'}</button>
         ${camList ? `<div class="chips">${camOpts}</div>` : ''}</div>`, true)}
-      ${row('넓게 보기', '4:3 화면과 가장 작은 줌을 요청해요. 갤럭시 기본 카메라의 광각 전환이 이 앱에서도 지원되는지는 기종에 따라 달라요. 운동 화면에 실제 카메라·화면 비율·줌을 표시해요', sw('cameraWide'))}
+      ${row('넓게 보기', '4:3 화면(센서 전체)으로 찍어 좌우가 더 보여요. 줌은 1배 아래로 못 내려가서, 더 넓게 보려면 광각 카메라를 골라야 해요. 운동 화면에 실제 카메라·화면 비율·줌을 표시해요', sw('cameraWide'))}
       ${row('화면 좌우 반전', '거울처럼 보이기 (전면 카메라일 때만)', sw('mirror'))}
     </div>
     <h2 class="section-title">인식</h2>
@@ -749,6 +1001,8 @@ function renderSettings() {
     <p class="muted small" style="text-align:center;margin-top:20px">핸즈프리 PT · 포즈 인식 MediaPipe · 영상은 폰 밖으로 나가지 않아요</p>`;
 }
 $('settings-body').addEventListener('click', async (e) => {
+  if (e.target.closest('#btn-goal-settings')) { openGoal(); return; }
+  if (e.target.closest('#btn-place-help-settings')) { showPlacementHelp(); return; }
   if (e.target.closest('#btn-hc-settings')) {
     NativeHealth?.openSettings().catch((err) => toast(err.message || '헬스 커넥트를 열지 못했어요'));
     return;
@@ -818,7 +1072,7 @@ $('settings-body').addEventListener('click', async (e) => {
     b.disabled = true;
     b.textContent = '찾는 중…';
     try {
-      camList = await listCameras();
+      camList = await cameraOptions();
       if (!camList.length) toast('카메라를 찾지 못했어요');
     } catch {
       toast('카메라 권한이 필요해요');
@@ -894,8 +1148,24 @@ try {
   }
 } catch { /* 저장소를 못 쓰면 건너뜀 */ }
 
+// 하루 목표 알림: 시작할 때·앱으로 돌아올 때 다시 계산(날짜가 바뀌었거나 다른 곳에서 운동했을 수 있다)
+syncReminders();
+NativeApp?.addListener('appStateChange', ({ isActive }) => {
+  if (!isActive) return;
+  if (!$('screen-home').hidden) renderHome();
+  syncReminders();
+});
+onReminderTap((extra) => {
+  if (extra?.kind === 'test') { toast('알림이 잘 와요!'); return; }
+  if (!$('screen-workout').hidden) return;
+  go('home');
+  const p = progress(store.goal(), store.sessions());
+  if (!p.met && leftText(p)) toast(`남은 것: ${leftText(p)}`, 4000);
+  setTimeout(() => $('goal-card')?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 80);
+});
+
 // 검증용 접근점 (앱 자동 점검·개발 도구가 사용)
-window.__hfpt = { workout, store, isNative, NativeHealth, toHealthRecord };
+window.__hfpt = { workout, store, isNative, NativeHealth, NativeCameraInfo, toHealthRecord, syncReminders, renderHome, cameraOptions };
 
 // 안드로이드 뒤로가기: 대화상자 닫기 → 운동 중엔 무시(실수로 꺼지지 않게) → 이전 화면 → 홈 → 앱 내리기
 NativeApp?.addListener('backButton', () => {

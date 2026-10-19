@@ -8,6 +8,8 @@ A() { timeout 90 adb "$@"; }
 echo "== 설치"; A install -r "$APK" || exit 1
 A shell pm grant "$PKG" android.permission.CAMERA
 # 헬스 커넥트 쓰기 권한(안드로이드 14 는 시스템에 들어 있다): 점검에서 실제로 써 보려고 미리 허용
+# 하루 목표 알림(안드로이드 13+ 알림 권한)
+A shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS || echo "(알림 권한 부여 실패)"
 for P in WRITE_EXERCISE WRITE_TOTAL_CALORIES_BURNED; do
   A shell pm grant "$PKG" "android.permission.health.$P" || echo "(헬스 커넥트 권한 $P 부여 실패)"
 done

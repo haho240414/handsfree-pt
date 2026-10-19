@@ -611,5 +611,37 @@
   "conf": "robust",
   "view": "와이드↔근접 교차 편집",
   "split": "holdout"
+ },
+ "squat_side_nicke_close": {
+  "exercise": "squat",
+  "reps": 3,
+  "conf": "high",
+  "view": "무릎 위로 자른 화면(폰을 가까이 둔 것처럼) · 스쿼트를 골라서 할 때",
+  "split": "dev",
+  "mode": "fixed"
+ },
+ "squat_front_nicke_close": {
+  "exercise": "squat",
+  "reps": 3,
+  "conf": "high",
+  "view": "무릎 위로 자른 화면(폰을 가까이 둔 것처럼) · 스쿼트를 골라서 할 때",
+  "split": "dev",
+  "mode": "fixed"
+ },
+ "squat_mensgarage_close": {
+  "exercise": "squat",
+  "reps": 6,
+  "conf": "high",
+  "view": "무릎 위로 자른 화면(폰을 가까이 둔 것처럼) · 스쿼트를 골라서 할 때",
+  "split": "dev",
+  "mode": "fixed"
+ },
+ "goblet_opex_close": {
+  "exercise": "squat",
+  "reps": 3,
+  "conf": "high",
+  "view": "무릎 위로 자른 화면(폰을 가까이 둔 것처럼) · 스쿼트를 골라서 할 때",
+  "split": "dev",
+  "mode": "fixed"
  }
 }

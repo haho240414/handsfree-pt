@@ -20,6 +20,7 @@ export const DEFAULT_SETTINGS = {
   cameraId: '',         // 고른 카메라(deviceId), '' = 전면 기본
   cameraLabel: '',
   cameraWide: true,     // 넓게 보기: 4:3·크롭 없음·최소 줌 요청. 자동 선택은 확인된 전면 광각 우선
+  cameraChecked: false, // 더 넓은 전면 카메라가 있는지 첫 운동 때 한 번 시야각(렌즈 정보)으로 확인했는지
   debug: false,         // 인식 과정 보기
   theme: 'auto',        // auto | light | dark
 };
@@ -29,6 +30,7 @@ const blank = () => ({
   routineDraft: null,  // 지금 짜 둔 오늘 루틴 { name, focus, equipment, level, reason, items, seedN }
   routinePrefs: { focus: 'auto', equipment: 'body', minutes: 30, level: 1 },
   routines: [],        // 저장한 내 루틴 [{ id, name, items, savedAt }]
+  goal: null,          // 하루 목표 (goal.js GOAL_DEFAULT 모양), null = 아직 안 정함
 });
 
 let state = load();
@@ -107,6 +109,12 @@ export function deleteRoutine(id) {
   persist();
 }
 
+export const goal = () => state.goal || null;
+export function setGoal(g) {
+  state.goal = g;
+  persist();
+}
+
 export const lastPick = () => state.lastPick || [];
 export function setLastPick(ids) {
   state.lastPick = ids;
@@ -136,6 +144,7 @@ export function importJSON(text) {
   state.sessions.sort((a, b) => b.start - a.start);
   if(Array.isArray(data.favoriteExercises)) state.favoriteExercises=[...new Set([...favoriteExercises(),...data.favoriteExercises.filter(x=>typeof x==='string')])];
   if (data.weights) state.weights = { ...data.weights, ...state.weights };
+  if (data.goal && !state.goal) state.goal = data.goal;
   if (Array.isArray(data.routines)) {
     const have = new Set(routines().map((r) => r.id));
     state.routines = [...routines(), ...data.routines.filter((r) => r?.id && !have.has(r.id))];
