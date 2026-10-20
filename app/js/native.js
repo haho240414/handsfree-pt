@@ -16,6 +16,8 @@ export const NativeHealth = Capacitor.getPlatform() === 'android' ? plugin('Heal
 export const NativeNotify = plugin('LocalNotifications');
 // 앱 안의 플러그인(android/.../CameraInfoPlugin.kt): 카메라마다 시야각(렌즈 초점거리·센서 크기로 계산)
 export const NativeCameraInfo = Capacitor.getPlatform() === 'android' ? plugin('CameraInfo') : null;
+// 앱 안의 플러그인(SystemPlugin.kt): 배터리 최적화(절전) 상태·'제한 없음' 설정 열기
+export const NativeSystem = Capacitor.getPlatform() === 'android' ? plugin('HfptSystem') : null;
 
 /** 백업 파일을 공유 창으로 내보내기 (구글 드라이브·내 파일·카톡 등으로 저장) */
 export async function shareTextFile(name, text) {

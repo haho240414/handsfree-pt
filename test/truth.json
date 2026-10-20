@@ -482,9 +482,10 @@
  "sideplank_ccg": {
   "exercise": "sideplank",
   "reps": null,
-  "conf": "robust",
-  "view": "설명 영상 39초",
-  "split": "holdout"
+  "hold": 10,
+  "conf": "mid",
+  "view": "설명 영상 39초·옆으로 누워 받침(6~15초·26~28초)과 무릎 대고 하는 사이드 플랭크(15~25초)는 안 셈 → 다리 편 사이드 플랭크 28~37.8초",
+  "split": "dev"
  },
  "reversefly_runna": {
   "exercise": "reversefly",
@@ -539,7 +540,7 @@
   "exercise": "legcurl",
   "reps": null,
   "conf": "robust",
-  "view": "설명 위주·느린 시범 1회",
+  "view": "설명 위주·느린 시범 1회 · 18~24초 기구에 엎드려 가만히 → 자동 인식이 플랭크 6초로 셈(알려진 한계: 엉덩이가 조금 높은 진짜 플랭크와 관절 값이 같아 못 가름, 레그 컬을 고르면 안 생김)",
   "split": "holdout"
  },
  "donkey_puregym": {
@@ -643,5 +644,115 @@
   "view": "무릎 위로 자른 화면(폰을 가까이 둔 것처럼) · 스쿼트를 골라서 할 때",
   "split": "dev",
   "mode": "fixed"
+ },
+ "lunge_alt_demo_close": {
+  "exercise": "lunge",
+  "reps": 4,
+  "conf": "high",
+  "view": "무릎 위로 자른 화면(폰을 가까이 둔 것처럼) · 런지를 골라서 할 때",
+  "split": "dev",
+  "mode": "fixed"
+ },
+ "lunge_strengthlog_close": {
+  "exercise": "lunge",
+  "reps": 5,
+  "conf": "high",
+  "view": "무릎 위로 자른 화면(폰을 가까이 둔 것처럼) · 런지를 골라서 할 때",
+  "split": "dev",
+  "mode": "fixed"
+ },
+ "lunge_front_close": {
+  "exercise": "lunge",
+  "reps": 10,
+  "conf": "high",
+  "view": "무릎 위로 자른 화면(폰을 가까이 둔 것처럼) · 런지를 골라서 할 때",
+  "split": "dev",
+  "mode": "fixed"
+ },
+ "plank_crossfit": {
+  "exercise": "plank",
+  "reps": null,
+  "hold": 7,
+  "conf": "mid",
+  "view": "측면·무릎 꿇고 시작 → 팔꿈치 플랭크 약 7초 → 무릎 내림",
+  "split": "dev"
+ },
+ "highplank_ranch": {
+  "exercise": "plank",
+  "reps": null,
+  "hold": 14,
+  "conf": "mid",
+  "view": "측면·하이 플랭크(영상 내내 14.6초)",
+  "split": "dev"
+ },
+ "plank_home20": {
+  "exercise": "plank",
+  "reps": null,
+  "hold": 21,
+  "conf": "mid",
+  "view": "측면·팔꿈치 플랭크(앞뒤 장면 전환)",
+  "split": "dev"
+ },
+ "plank_40s": {
+  "exercise": "plank",
+  "reps": null,
+  "hold": 40,
+  "conf": "mid",
+  "view": "측면·하이 플랭크(앞뒤 로고)",
+  "split": "dev"
+ },
+ "highplank_howto": {
+  "exercise": "plank",
+  "reps": null,
+  "hold": 39,
+  "conf": "mid",
+  "view": "측면 → 대각선 → 정면 → 반대 대각선(각도 전환 편집)·하이 플랭크",
+  "split": "dev"
+ },
+ "highplank_howto12": {
+  "exercise": "plank",
+  "reps": null,
+  "hold": 6,
+  "conf": "mid",
+  "view": "앞 대각선·무릎 꿇고 시작 → 하이 플랭크 약 5.6초",
+  "split": "dev"
+ },
+ "plank_hold39": {
+  "exercise": "plank",
+  "reps": null,
+  "conf": "robust",
+  "view": "앞 대각선 위·몸통/얼굴 클로즈업 컷이 섞인 편집 영상(플랭크 약 20초). 알려진 한계: 들기 전 엎드려 팔꿈치로 받친 4초(6~10.5초)도 플랭크로 셈 — 이 각도에선 엉덩이 처짐과 구분 안 됨",
+  "split": "dev"
+ },
+ "plank_elbowprog": {
+  "exercise": "plank",
+  "reps": null,
+  "hold": 14,
+  "conf": "mid",
+  "view": "강의 영상·바른 자세 8초+6초 사이에 엉덩이 높게(틀린 예)·무릎 대고 버티기 시범(안 셈)",
+  "split": "dev"
+ },
+ "plank_lfc": {
+  "exercise": "plank",
+  "reps": null,
+  "hold": 0,
+  "conf": "high",
+  "view": "측면 대각선·팔꿈치 플랭크 3.5초뿐(5초 미만은 기록 안 함)",
+  "split": "dev"
+ },
+ "plank_mgh": {
+  "exercise": "plank",
+  "reps": null,
+  "hold": 0,
+  "conf": "high",
+  "view": "설명 영상·무릎 꿇고 말하는 강사와 누운 환자(플랭크 없음 → 아무것도 안 잡혀야)",
+  "split": "dev"
+ },
+ "highplank_core": {
+  "exercise": "plank",
+  "reps": null,
+  "conf": "robust",
+  "view": "편집 영상·하이 플랭크가 2~3초씩 클로즈업 사이에(오인식만 확인)",
+  "split": "dev"
  }
 }

@@ -12,6 +12,8 @@ export const GOAL_DEFAULT = {
   days: [0, 1, 2, 3, 4, 5, 6], // 목표가 있는 요일 (0 = 일요일). 빠진 요일은 쉬는 날: 알림 없음·연속 기록도 안 끊김
   remind: '20:00',             // 첫 알림, '' = 끔
   lastCall: '22:00',           // 마지막 알림, '' = 끔
+  morning: '',                 // 아침 알림(오늘 할 것), '' = 끔
+  weekly: 0,                   // 주간 목표: 일주일(월~일)에 목표를 채운 날 수, 0 = 안 씀
 };
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -95,6 +97,24 @@ export function streak(goal, sessions, now = Date.now()) {
 }
 
 /**
+ * 이번 주(월요일부터) 목표를 채운 날 수와 주간 목표까지 남은 날.
+ * @returns {{done:number, target:number, left:number, daysLeft:number, days:boolean[]}} days = 월~일 채웠는지
+ */
+export function weekProgress(goal, sessions, now = Date.now()) {
+  const d0 = new Date(startOfDay(now));
+  const mon = addDays(d0.getTime(), -((d0.getDay() + 6) % 7));
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const t = addDays(mon, i) + 12 * 3600 * 1000;
+    days.push(t <= now + 12 * 3600 * 1000 ? progress(goal, sessions, t).met : false);
+  }
+  const done = days.filter(Boolean).length;
+  const target = Math.max(0, Math.min(7, goal?.weekly || 0));
+  const todayIdx = (d0.getDay() + 6) % 7;
+  return { done, target, left: Math.max(0, target - done), daysLeft: 7 - todayIdx, days };
+}
+
+/**
  * 남은 목표를 '오늘의 루틴' 항목으로: 운동마다 남은 양을 한 세트 적당량(보통 강도 기준)으로 나눈다.
  * 예) 스쿼트 50회 남음 → 12회 × 4세트 + 마지막 세트는 남은 만큼(2회짜리 세트는 앞 세트에 얹는다)
  */
@@ -132,10 +152,12 @@ export const isReminderId = (id) => id >= 200000000 && id < 300000000;
  */
 export function reminderPlan(goal, sessions, now = Date.now(), days = 14) {
   if (!hasGoal(goal)) return [];
-  const slots = [goal.remind, goal.lastCall].map(parseHM);
+  // 0 = 첫 알림(저녁), 1 = 마지막 알림, 2 = 아침 알림(오늘 할 것)
+  const slots = [goal.remind, goal.lastCall, goal.morning].map(parseHM);
   const out = [];
   const today = progress(goal, sessions, now);
   const st = streak(goal, sessions, now);
+  const wk = weekProgress(goal, sessions, now);
   for (let d = 0; d < days; d++) {
     const base = addDays(startOfDay(now), d);
     if (!isGoalDay(goal, base)) continue;
@@ -145,15 +167,30 @@ export function reminderPlan(goal, sessions, now = Date.now(), days = 14) {
       const at = new Date(base);
       at.setHours(hm[0], hm[1], 0, 0);
       if (at.getTime() <= now + 30 * 1000) return;
-      const left = d === 0 && today.pct > 0 ? leftText(today) : goalText(goal);
+      const partial = d === 0 && today.pct > 0;
+      const left = partial ? leftText(today) : goalText(goal);
+      // 주간 목표: 이번 주 남은 날이 모자라면 '오늘 꼭'
+      const sameWeek = d < wk.daysLeft;
+      const mustToday = d === 0 && wk.target > 0 && wk.left > 0 && wk.left >= wk.daysLeft;
+      const week = sameWeek && wk.target > 0 ? ` · 이번 주 ${wk.done}/${wk.target}일` : '';
+      if (slot === 2) {
+        out.push({
+          id: reminderId(base, slot), at: at.getTime(), day: dayKey(base), slot,
+          title: '오늘 운동, 이렇게 해 볼까요?',
+          body: `오늘 목표: ${left}${week}${d === 0 && st > 0 ? ` · ${st}일 연속 달성 중` : ''}`,
+        });
+        return;
+      }
       const last = slot === 1 && slots[0];
-      const title = last ? '오늘 목표, 아직 늦지 않았어요' : d === 0 && today.pct > 0 ? '조금만 더 하면 오늘 목표!' : '오늘 운동 아직 안 했어요';
-      const keep = d === 0 && st > 0 ? ` (${st}일 연속 달성 중)` : '';
+      // 연속 기록이 걸려 있으면(오늘만 알 수 있다) 끊기기 직전이라고
+      const title = mustToday ? '이번 주 목표, 오늘 꼭 해야 해요'
+        : d === 0 && st >= 2 ? (last ? `${st}일 연속 기록이 끊기기 직전이에요` : `오늘 하면 ${st + 1}일 연속!`)
+          : last ? '오늘 목표, 아직 늦지 않았어요' : partial ? '조금만 더 하면 오늘 목표!' : '오늘 운동 아직 안 했어요';
       out.push({
         id: reminderId(base, slot), at: at.getTime(), day: dayKey(base), slot, title,
-        body: `${d === 0 && today.pct > 0 ? '남은 것' : '목표'}: ${left}${keep} — 앱을 열면 남은 만큼 바로 시작해요`,
+        body: `${partial ? '남은 것' : '목표'}: ${left}${week} — 누르면 남은 만큼 바로 시작해요`,
       });
     });
   }
-  return out;
+  return out.sort((a, b) => a.at - b.at);
 }

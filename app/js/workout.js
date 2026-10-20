@@ -14,6 +14,7 @@ import { DiagRecorder, corrections } from './diag.js';
 import { openCamera, widenCamera, cameraSummary, cameraOptions } from './camera.js';
 import { framingIssue, exerciseFraming, FramingGuide } from './framing.js';
 import { NativeCameraInfo } from './native.js';
+import { showPlacementHelp } from './placement.js';
 import { PlanRunner, isHold, isTimer, isTimed, TIMER_STEPS, PLAN_META, weightStep } from './routine.js';
 import { loadDemos, playDemo, hasDemo } from './demo.js';
 import * as store from './store.js';
@@ -228,9 +229,17 @@ export class Workout {
     this.ticker = setInterval(() => this._tick(), 250);
     this._hud();
     if (!this.isFile) {
+      // 루틴: 자리 잡는 동안 오늘 할 것부터 (PT 처럼 '무엇을 몇 개' 먼저 듣고 준비)
+      if (this.plan) {
+        const it = this.plan.item;
+        const n = this.plan.items.filter((x) => !isTimer(x)).length;
+        this.voice.say(isTimer(it)
+          ? `${this.session.plan?.name || '오늘 루틴'}, ${n}가지 운동이에요. 먼저 ${it.name}부터 할게요.`
+          : `${this.session.plan?.name || '오늘 루틴'}, ${n}가지 운동이에요. 첫 운동은 ${exName(it.exercise)} ${this._targetWords(it)} ${it.sets}세트.`);
+      }
       if (this.camInfo?.facing === 'environment') this.voice.say('후면 카메라예요. 폰 뒷면이 나를 보게 세워 주세요.');
       const fo = this._framingOptions(this.tracker.snapshot());
-      this.voice.say(fo.closeSquat ? '카메라에 머리부터 허리까지 들어오도록 자리 잡아 주세요. 무릎까지 보이면 자세 교정도 해요.'
+      this.voice.say(fo.closeView ? '카메라에 머리부터 허리까지 들어오도록 자리 잡아 주세요. 무릎까지 보이면 자세 교정도 해요.'
         : fo.auto ? '카메라에 상체가 들어오도록 자리 잡아 주세요. 하체 운동이면 무릎까지 보이게 해 주세요.'
           : fo.upperBody ? '카메라에 상체와 움직이는 팔 전체가 들어오도록 자리 잡아 주세요.' : '카메라에 전신이 들어오도록 자리 잡아 주세요.');
     }
@@ -269,7 +278,10 @@ export class Workout {
     if(this.appliedUp)this.tracker.setCameraUp(this.appliedUp);
     this.phase='work';this.el.frame.hidden=true;
     if(this.pt){this.pt.readyAt=now;this.pt.lastActiveAt=now;}
-    this.voice.beep(990,.15);this.voice.say('시작하세요.',{interrupt:true});this._hud();
+    // 루틴은 첫 운동과 목표를 한 번 더: "스쿼트 12회, 시작하세요." (준비운동이면 그 이름)
+    const it=this.plan?.item;
+    const go=!it?'시작하세요.':isTimer(it)?`${it.name}, 시작하세요.`:`${exName(it.exercise)} ${this._targetWords(it)}, 시작하세요.`;
+    this.voice.beep(990,.15);this.voice.say(go,{interrupt:true});this._hud();
   }
 
   pause(reason = '') {
@@ -346,9 +358,8 @@ export class Workout {
     finally{this.switchingCamera=false;if(this.session===switchingSession)this._hud();}
   }
 
-  cameraHelp() {
-    const d=$('dialog');d.innerHTML='<form method="dialog"><h3>촬영 위치</h3><p>휴대폰을 안정적인 곳에 세우고 화면 가운데에 서 주세요. 머리와 발이 함께 보이도록 거리를 조절해 주세요.</p><p>몸이 작게 보이면 조금 가까이, 다리가 잘리면 조금 뒤로 이동해 주세요. 조명은 몸 앞쪽이 좋아요.</p><button value="ok" class="btn btn-primary">확인</button></form>';d.onclose=null;d.showModal();
-  }
+  // 촬영 위치 도움말: 지금 켜진 카메라의 시야각으로 두는 곳별 거리(placement.js)
+  cameraHelp() { showPlacementHelp({ label: this.camInfo?.label }); }
 
   _modernHUD() {
     const snap=this.tracker.snapshot(), resting=!!this.restUntil && (this.plan?this.pt.stage==='rest':snap.state==='search' && !snap.pending);
@@ -1242,8 +1253,8 @@ export class Workout {
   _framingOptions(snap) {
     const fixed = this.tracker.o.fixed;
     const ex = EXERCISE_BY_ID[fixed || snap.exercise || snap.pending?.exercise];
-    // 스쿼트를 골라서 할 때(가까운 화면 신호): 서 있을 때 허리까지만 보이면 센다 → 무릎을 요구하지 않는다
-    if (fixed && closeOK(fixed)) return { ...exerciseFraming(ex), upperBody: true, requireArms: false, bothArms: false, closeSquat: true };
+    // 스쿼트·런지·데드리프트를 골라서 할 때(가까운 화면 신호·몸통 기울기): 서 있을 때 허리까지만 보이면 센다 → 무릎을 요구하지 않는다
+    if (fixed && closeOK(fixed)) return { ...exerciseFraming(ex), upperBody: true, requireArms: false, bothArms: false, closeView: true };
     // 자동 인식에서 아직 무슨 운동인지 모르면 상체 기준으로 너그럽게 (하체 운동이면 무릎까지는 글로만 알림)
     if (!ex) return { ...exerciseFraming(null), upperBody: true, requireArms: false, auto: true };
     return exerciseFraming(ex);
@@ -1254,8 +1265,8 @@ export class Workout {
     if (issue || !snap.raw) return issue;
     const s = snap.raw.seen || {};
     if (o.auto && !s.knees) return { code: 'kneesAuto', text: '상체 운동은 이대로 돼요 · 하체 운동이면 무릎까지 보이게', speak: false };
-    // 가까운 화면 스쿼트: 자리 잡을 때만(앉으면 엉덩이가 잠깐 화면 밖으로 나가는 건 정상)
-    if (o.closeSquat && this.phase === 'prepare') {
+    // 가까운 화면(스쿼트·런지·데드리프트): 자리 잡을 때만(앉으면 엉덩이가 잠깐 화면 밖으로 나가는 건 정상)
+    if (o.closeView && this.phase === 'prepare') {
       if (!s.hips) return { code: 'hips', text: '허리까지 보이게 반 걸음 뒤로 가 주세요', speak: true };
       if (!s.knees) return { code: 'kneesSoft', text: '이대로 세요 · 무릎까지 보이면 자세 교정도 해요', speak: false };
     }

@@ -356,13 +356,24 @@ export class Tracker {
     const win = this._window(t - 1.2, t);
     const spec = this.holdSpecs.find((h) => h.pose(f) && h.still(win)) || null;
     if (spec) {
-      if (this.holdId !== spec.id || this.holdSince == null) { this.holdId = spec.id; this.holdSince = t; }
+      if (this.holdId !== spec.id || this.holdSince == null) {
+        // 가만히 있던 1.2초도 이미 버틴 시간: 그 안에서 자세가 이어진 첫 프레임부터 잰다
+        // (실제 플랭크 영상 11개에서 시간이 늘 1~1.5초 짧게 재졌다)
+        let since = t;
+        for (let i = win.length - 1; i >= 0 && spec.pose(win[i]); i--) since = win[i].t;
+        this.holdId = spec.id;
+        this.holdSince = since;
+      }
       this.holdLastOk = t;
     } else if (this.holdSince != null && t - this.holdLastOk > 0.5) {
       this.holdSince = null;
       this.holdId = null;
     }
     if (this.holdSince == null || t - this.holdSince < this.o.holdStart) return;
+    // 세던(또는 세려던) 운동의 반복 도중이면 아직 버티기로 보지 않는다: 엎드린 채 몇 초 멈추는 느린 버피 등.
+    // 버틴 시간은 holdSince 부터 재므로 늦게 시작해도 시간은 줄지 않는다
+    if ((this.state === 'reps' && this._midRep())
+      || Object.keys(this.valid).some((id) => this.valid[id].length && this._inRep(id))) return;
     if (this.state === 'reps') {
       if (this.set.lastRepT > this.holdSince) return; // 버티는 중에 반복이 있었다 → 버티기 아님
       this._endSet(ev, 'switch');
@@ -426,9 +437,13 @@ export class Tracker {
 
   // 내려간(힘주는) 자세로 버티는 중이면 세트를 끝내지 않는다 (예: 스쿼트 바닥에서 잠깐 멈춤)
   _midRep() {
-    const s = this.set;
-    const c = this.counters[s.exercise];
-    return c.mode === 'valley' && c.peak && this.t - c.peak.t < EXERCISE_BY_ID[s.exercise].maxDur;
+    return this._inRep(this.set.exercise);
+  }
+
+  /** 그 운동의 반복 도중인가: 내려간 뒤 아직 안 올라옴 (최대 1회 시간까지) */
+  _inRep(id) {
+    const c = this.counters[id];
+    return c?.mode === 'valley' && !!c.peak && this.t - c.peak.t < EXERCISE_BY_ID[id].maxDur;
   }
 
   _endSet(ev, reason) {

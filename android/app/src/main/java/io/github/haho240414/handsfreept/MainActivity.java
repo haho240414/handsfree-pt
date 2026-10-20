@@ -11,6 +11,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(HealthConnectPlugin.class);
         // 카메라마다 시야각(넓게 찍히는 카메라 고르기)
         registerPlugin(CameraInfoPlugin.class);
+        // 배터리 최적화(절전) 상태 — 하루 목표 알림이 늦거나 안 오는 것 막기
+        registerPlugin(SystemPlugin.class);
         super.onCreate(savedInstanceState);
         // 폰을 세워두고 운동하는 앱이라 화면이 꺼지면 안 된다
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);

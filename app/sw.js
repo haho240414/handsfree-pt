@@ -1,10 +1,10 @@
 // 오프라인 동작용 서비스 워커: 앱 화면은 최신 우선(네트워크 → 실패 시 캐시),
 // 용량 큰 AI 모델·엔진 파일은 캐시 우선(한 번 받으면 다시 안 받음).
-const VERSION = 'hfpt-v18';
+const VERSION = 'hfpt-v19';
 const SHELL = [
   './', './index.html', './css/app.css', './css/redesign.css', './fonts/PretendardVariable.woff2', './manifest.webmanifest',
   './js/main.js', './js/workout.js', './js/history.js', './js/format.js', './js/store.js', './js/voice.js', './js/pose.js',
-  './js/tilt.js', './js/diag.js', './js/native.js', './js/camera.js', './js/framing.js', './js/session-edit.js', './js/session-clock.js', './js/icons.js', './js/routine.js', './js/stats.js', './js/health.js', './js/goal.js', './js/reminders.js', './privacy.html', './js/demo.js', './data/demos.json',
+  './js/tilt.js', './js/diag.js', './js/native.js', './js/camera.js', './js/framing.js', './js/session-edit.js', './js/session-clock.js', './js/icons.js', './js/routine.js', './js/stats.js', './js/health.js', './js/goal.js', './js/reminders.js', './js/placement.js', './privacy.html', './js/demo.js', './data/demos.json',
   './js/engine/features.js', './js/engine/filters.js', './js/engine/counter.js', './js/engine/exercises.js', './js/engine/tracker.js',
   './js/engine/tempo.js',
   './icons/ui/arrow-left.svg',

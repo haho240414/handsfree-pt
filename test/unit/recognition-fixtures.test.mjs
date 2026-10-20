@@ -28,7 +28,7 @@ test('저프레임 양팔 컬: 한쪽 팔의 최저점 시각이 밀려도 4회�
   const {reps}=trackFixture('curl_mccarthy',{fixed:'curl'},null,2);
   assert.equal(reps,4);
 });
-test('기존 실제 영상: 49개 횟수·3개 버티기 검증과 오인식 성적을 유지한다', () => {
+test('기존 실제 영상: 49개 횟수·13개 버티기(플랭크 9개 포함) 검증과 오인식 성적을 유지한다', () => {
   const truth=JSON.parse(fs.readFileSync(new URL('../truth.json',import.meta.url)));
   let n=0,exact=0,within1=0,wrongLabeled=0,wrongAll=0,holds=0;
   for(const [clip,t] of Object.entries(truth)) {
@@ -50,16 +50,25 @@ test('기존 실제 영상: 49개 횟수·3개 버티기 검증과 오인식 성
       assert.ok(Math.abs(sec-t.hold)<=3,clip);
     }
   }
-  assert.equal(n,49); assert.equal(holds,3);
+  assert.equal(n,49); assert.equal(holds,13);
   assert.ok(exact>=34,`정확 ${exact}/49`);
   assert.ok(within1>=44,`±1 ${within1}/49`);
   assert.equal(wrongLabeled,0);
   assert.ok(wrongAll<=3,`편집 영상 포함 오인식 ${wrongAll}`);
 });
-test('가까운 화면(무릎 위로 자른 영상): 스쿼트를 골라서 하면 4개 모두 정확, 원본 영상과 같은 횟수', () => {
+test('버티기 시간은 들어 올린 때부터 내려놓은 때까지(±1초): 플랭크 3개·사이드 플랭크 2개', () => {
+  // 가만히 있는지 보는 1.2초도 버틴 시간이고, 무릎을 대거나 엉덩이를 바닥에 내리고 누운 시간은 아니다
+  const truth=JSON.parse(fs.readFileSync(new URL('../truth.json',import.meta.url)));
+  for(const clip of ['plank_crossfit','highplank_ranch','highplank_howto12','sideplank_nasm','sideplank_ccg']) {
+    const t=truth[clip];
+    const sec=trackFixture(clip).tr.sets.filter(s=>s.exercise===t.exercise).reduce((sum,s)=>sum+(s.holdSec||0),0);
+    assert.ok(Math.abs(sec-t.hold)<=1,`${clip} ${sec}초/${t.hold}초`);
+  }
+});
+test('가까운 화면(무릎 위로 자른 영상): 스쿼트 4개·런지 3개를 골라서 하면 모두 정확, 원본 영상과 같은 횟수', () => {
   const truth=JSON.parse(fs.readFileSync(new URL('../truth.json',import.meta.url)));
   const close=Object.entries(truth).filter(([,t])=>t.mode==='fixed');
-  assert.equal(close.length,4);
+  assert.equal(close.length,7);
   for(const [clip,t] of close) {
     const opts={fixed:t.exercise,minSetReps:1,holdMin:1,idleSec:600};
     assert.equal(trackFixture(clip,opts).reps,t.reps,clip);

@@ -43,6 +43,10 @@ export const not = (x) => (x === null ? null : !x);
 // 다리가 고정인지 (점핑잭이 아닌지)
 const legsStill = (w) => not(gt(R(w, 'ankleDX'), 0.2));
 // 가까이서 말하며 손짓하는 것과 구분: 하체가 보이거나, 몸통이 화면 높이의 40% 미만(실측: 말할 때 46%, 운동 중 20~34%)
+// 가까운 화면 보조 신호(운동을 직접 골랐을 때만, tracker.js closeSpecs): 앉거나 내려갈 때 무릎이 화면 밖으로 나가
+// 주 신호가 끊기면 어깨가 내려갔다 올라오는 높이로 센다. 단위 = 서 있을 때 화면상 몸통 길이(거리와 상관없게)
+// 실측(무릎 위로 자른 영상): 스쿼트 서 있음 -1.25 → 바닥 -2.63, 런지는 0.75~1.07 몸통 길이만큼 내려감
+const CLOSE_SHOULDER = { signal: (f) => (f.torsoRef > 0 && Number.isFinite(f.shY) ? -f.shY / f.torsoRef : NaN), prom: 0.45, minDur: 0.6, maxDur: 8 };
 const atDistance = (w) => or(gt(M(w, 'visLegs'), 0.55), lt(M(w, 'torsoFrac'), 0.4));
 // 엎드린 자세(얼굴이 바닥 쪽): 푸시업·플랭크 계열. 앉거나 누운 자세와 구분
 const faceDown = (w) => gt(M(w, 'noseDrop'), -0.1);
@@ -72,7 +76,7 @@ export const EXERCISES = [
     signal: (f) => f.hip, prom: 30, minDur: 0.5, maxDur: 8,
     // 가까운 화면(운동을 직접 골랐을 때만): 앉을 때 무릎이 화면 밖으로 나가 엉덩이 각도가 끊기면 어깨 높이로 센다.
     // 단위 = 서 있을 때 화면상 몸통 길이(가까이 서면 몸통이 크게 보이니 거리와 상관없게)
-    close: { signal: (f) => (f.torsoRef > 0 && Number.isFinite(f.shY) ? -f.shY / f.torsoRef : NaN), prom: 0.45, minDur: 0.6, maxDur: 8 },
+    close: CLOSE_SHOULDER,
     tempo: { first: 'ecc', ecc: '앉기', con: '일어서기', dist: (f) => f.hipH },
     check: (w, b) => [
       ['서서 하는 동작', standing(w), 'core'],
@@ -95,9 +99,11 @@ export const EXERCISES = [
   },
   {
     id: 'lunge', name: '런지', group: '하체', unit: '회', kind: 'reps', priority: 8, verified: true,
-    tip: '옆이나 대각선에서 두 무릎이 다 보이게',
+    tip: '옆이나 대각선에서 두 무릎이 다 보이게 (런지만 골랐으면 허리까지만 보여도 세요)',
+    tipFixed: '옆이나 대각선에서, 허리까지만 보여도 세요. 두 무릎까지 보이면 자세 교정도 해요',
     // 신호: 앞다리 엉덩이 각도(좌우 중 작은 쪽)
     signal: (f) => f.hipMin, prom: 30, minDur: 0.5, maxDur: 8,
+    close: CLOSE_SHOULDER,
     tempo: { first: 'ecc', ecc: '내려가기', con: '올라오기', dist: (f) => f.hipH },
     check: (w, b) => [
       ['서서 하는 동작', standing(w), 'core'],
@@ -116,6 +122,8 @@ export const EXERCISES = [
   {
     id: 'deadlift', name: '데드리프트', group: '하체', unit: '회', kind: 'reps', priority: 8, verified: true,
     tip: '옆에서 머리~무릎이 보이게 (루마니안 포함)',
+    tipFixed: '옆에서, 머리부터 허리까지 보이면 세요 (루마니안 포함)',
+    hipsOnly: true,
     // 엉덩이를 접는 동작(힌지). 바닥에서 시작하므로 첫 '들어올리기'도 1회로 센다(leadIn)
     // 실측: 바닥 무릎각 컨벤셔널 100~108°·루마니안 137~146°, 몸통 기울기 68~88°, 엉덩이 높이 0.48(컨벤셔널)~0.69m
     signal: (f) => -f.torsoTilt, prom: 25, minDur: 0.6, maxDur: 10, leadIn: true,
@@ -568,8 +576,9 @@ export const EXERCISES = [
     id: 'plank', name: '플랭크', group: '코어', unit: '초', kind: 'hold', priority: 4, verified: false,
     tip: '옆에서 머리~발끝이 한 화면에',
     // 매 프레임 자세 조건 (버티는 동작이라 반복 대신 시간을 잰다). 발·무릎이 안 보이면 그 조건은 넘어간다
+    // 실측(플랭크 영상 9개): 버티는 동안 무릎 155° 이상(하위 5%) / 무릎 대고 버티기 126~144° → 150° 로 가른다
     pose: (f) => f.torsoTilt > 55 && f.torsoTilt < 120
-      && f.hip > 140 && !(f.knee <= 140)
+      && f.hip > 140 && !(f.knee <= 150)
       && !(f.hipH >= 0.5) && f.shoulderOverWrist > 0.12
       && !(f.shRoll > 40), // 어깨가 위아래로 포개지면 사이드 플랭크 (실측 71~75°, 플랭크·푸시업 18° 이하)
     // 최근 구간이 움직이지 않는지 (푸시업과 구분)
@@ -627,7 +636,10 @@ export const EXERCISES = [
     id: 'sideplank', name: '사이드 플랭크', group: '코어', unit: '초', kind: 'hold', priority: 4, verified: true,
     tip: '정면에서 머리~발끝이 한 화면에',
     // 옆으로 누워 한 팔로 지탱하고 몸을 일직선으로 들어 올림. 실측: 어깨선이 수평에서 71~75°, 몸 일직선 170~172°
-    pose: (f) => f.shRoll > 40 && f.bodyLine > 150 && f.torsoTilt > 55 && f.torsoTilt < 110 && f.hip > 150,
+    // 엉덩이를 바닥에 내리고 팔꿈치로 받친 채 누우면(들기 전·내린 뒤) 엉덩이가 어깨~발목 선보다 0.08~0.11m 아래,
+    // 들어 올린 동안은 -0.05~0.05m (영상 2개) → 0.06m 넘게 처지면 버티는 중이 아니다
+    pose: (f) => f.shRoll > 40 && f.bodyLine > 150 && f.torsoTilt > 55 && f.torsoTilt < 110 && f.hip > 150
+      && !(f.hipSag > 0.06),
     still: (w) => R(w, 'hip') < 15 && R(w, 'torsoTilt') < 12,
     form: (w) => [
       ['sag', M(w, 'hip') < 160, '엉덩이 올리기', '엉덩이가 내려갔어요. 몸을 일직선으로 들어 올리세요'],
@@ -992,7 +1004,8 @@ export function uniqueExerciseFamilies(ids) {
 }
 // 운동을 직접 골랐고 가까운 화면 신호(close)가 있는 운동(스쿼트): 서 있을 때 허리까지만 보이면 센다
 // (test/videos5 무릎 위로 자른 영상 4개 모두 정확 — 앉을 때 무릎이 화면 밖으로 나가도 어깨 높이로 셈)
-export const closeOK = (id) => !!EXERCISE_BY_ID[id]?.close;
+// 데드리프트는 원래 몸통 기울기로 세서(hipsOnly) 무릎이 안 보여도 된다(시험 영상 2개도 무릎이 화면 밖)
+export const closeOK = (id) => !!(EXERCISE_BY_ID[id]?.close || EXERCISE_BY_ID[id]?.hipsOnly);
 
 /** 자세 교정 코드 → 설명 (기록 화면용) */
 export function formInfo(exId, code) {

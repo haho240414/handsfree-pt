@@ -1,7 +1,7 @@
 // 하루 목표 계산 (app/js/goal.js)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { progress, streak, remainingRoutine, reminderPlan, reminderId, isReminderId, goalText, leftText, hasGoal } from '../../app/js/goal.js';
+import { progress, streak, remainingRoutine, reminderPlan, reminderId, isReminderId, goalText, leftText, hasGoal, weekProgress } from '../../app/js/goal.js';
 
 const D = (y, m, d, h = 12, mi = 0) => new Date(y, m - 1, d, h, mi).getTime();
 const sess = (t, sets, min = 20) => ({ id: `s${t}`, start: t, end: t + min * 60000, sets });
@@ -75,4 +75,33 @@ test('알림 일정: 목표 요일만, 지난 시각·채운 날은 빼고, 오�
   // 끄면 없음
   assert.deepEqual(reminderPlan({ ...goal, on: false }, s, now), []);
   assert.equal(reminderId(D(2026, 1, 5), 0), 202601050);
+});
+
+test('주간 목표: 이번 주(월~) 채운 날 수, 남은 날이 모자라면 오늘 꼭', () => {
+  const done = (d) => sess(D(2026, 10, d, 9), [reps('squat', 50), hold('plank', 60)]);
+  const g = { ...goal, days: [0, 1, 2, 3, 4, 5, 6], weekly: 4 };
+  // 10/19(월)~ : 월·화 채움, 오늘 10/21(수) 아직
+  const s = [done(19), done(20), done(16)]; // 16(금)은 지난주
+  const w = weekProgress(g, s, D(2026, 10, 21, 10));
+  assert.deepEqual([w.done, w.target, w.left, w.daysLeft], [2, 4, 2, 5]);
+  assert.deepEqual(w.days.slice(0, 3), [true, true, false]);
+  // 토요일 아침인데 2일 남았으면 → 토·일 둘 다 해야 → 오늘 꼭
+  const sat = weekProgress(g, s, D(2026, 10, 24, 8));
+  assert.equal(sat.daysLeft, 2);
+  const plan = reminderPlan(g, s, D(2026, 10, 24, 8), 2);
+  assert.equal(plan.find((x) => x.slot === 0).title, '이번 주 목표, 오늘 꼭 해야 해요');
+  assert.match(plan[0].body, /이번 주 2\/4일/);
+});
+
+test('아침 알림·연속 기록 문구: 오늘 하면 N+1일, 마지막 알림은 끊기기 직전', () => {
+  const done = (d) => sess(D(2026, 10, d, 9), [reps('squat', 50), hold('plank', 60)]);
+  const g = { ...goal, days: [0, 1, 2, 3, 4, 5, 6], morning: '08:00' };
+  const s = [done(16), done(17), done(18)]; // 3일 연속, 오늘 10/19 아직
+  const plan = reminderPlan(g, s, D(2026, 10, 19, 7), 1);
+  assert.deepEqual(plan.map((x) => x.slot), [2, 0, 1]); // 시각 순: 아침 → 저녁 → 마지막
+  assert.equal(plan[0].title, '오늘 운동, 이렇게 해 볼까요?');
+  assert.match(plan[0].body, /3일 연속 달성 중/);
+  assert.equal(plan[1].title, '오늘 하면 4일 연속!');
+  assert.equal(plan[2].title, '3일 연속 기록이 끊기기 직전이에요');
+  assert.ok(plan.every((x) => isReminderId(x.id)) && plan[0].id === reminderId(D(2026, 10, 19), 2));
 });

@@ -2,7 +2,7 @@
 // 앞으로 14일치 알림을 미리 걸어 두고, 앱을 열 때·운동을 기록할 때·목표를 바꿀 때마다 다시 계산한다.
 // → 목표를 채운 날은 그날 알림이 지워지고, 앱을 며칠 안 열어도 알림은 온다. 무엇을 언제 보낼지는 goal.js(reminderPlan).
 
-import { NativeNotify } from './native.js';
+import { NativeNotify, NativeSystem } from './native.js';
 import * as store from './store.js';
 import { reminderPlan, isReminderId } from './goal.js';
 
@@ -61,6 +61,22 @@ async function doSync() {
   } catch (e) {
     return { ok: false, reason: String(e?.message || e), count: 0 };
   }
+}
+
+/**
+ * 절전(배터리 최적화) 상태: 'ok' = 제한 없음 / 'limited' = 최적화 대상(늦거나 안 올 수 있음) / null = 모름(웹 등)
+ * 삼성은 여기에 더해 '잠자는 앱'에 들어가면 알림이 안 온다(설정 → 배터리 → 백그라운드 사용 제한)
+ */
+export async function batteryState() {
+  if (!NativeSystem) return null;
+  try {
+    const st = await NativeSystem.batteryStatus();
+    return { state: st.ignoring ? 'ok' : 'limited', samsung: /samsung/i.test(st.manufacturer || '') };
+  } catch { return null; }
+}
+export async function openBatterySettings() {
+  if (!NativeSystem) return false;
+  try { await NativeSystem.openBatterySettings(); return true; } catch { return false; }
 }
 
 /** 알림이 실제로 오는지 시험: 몇 초 뒤 한 번 */

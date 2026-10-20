@@ -92,7 +92,16 @@ try {
     }
   }, sets);
   if (plan) await page.evaluate((p) => { window.__hfpt.workout.start({ plan: p }); }, plan);
-  else await page.click('#btn-start-auto');
+  else { await page.click('#btn-start-auto'); await page.click('#btn-home-start'); }
+  // 준비 화면(2026-10 디자인): 몸이 잡혀 '운동 시작'이 켜지면 누른다 → 3초 뒤 시작.
+  // 준비하는 동안 영상이 흘렀으니 시작하면 처음부터 다시 틀어서 영상 전체를 운동으로 본다
+  for (const t1 = Date.now(); Date.now() - t1 < 60000;) {
+    const st = await page.evaluate(() => ({ phase: window.__hfpt.workout.phase, ready: !!window.__hfpt.workout.ready }));
+    if (st.phase === 'work') break;
+    if (st.phase === 'prepare' && st.ready) await page.click('#btn-workout-primary');
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  await page.evaluate(async () => { const v = window.__fakeVideo; if (v) { v.currentTime = 0; await v.play(); } });
 
   // 화면 상태를 0.3초마다 읽어 바뀔 때만 기록
   const read = () => page.evaluate(() => {

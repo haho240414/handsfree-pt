@@ -51,7 +51,8 @@ const stage = async (name, expression, ms) => {
 
 const app = await stage('앱', `(async () => ({
   url: location.href, native: window.__hfpt?.isNative, platform: Capacitor.getPlatform(),
-  plugins: ['TextToSpeech','App','Share','Filesystem','HealthConnect','LocalNotifications','CameraInfo'].filter((p) => Capacitor.isPluginAvailable(p)),
+  plugins: ['TextToSpeech','App','Share','Filesystem','HealthConnect','LocalNotifications','CameraInfo','HfptSystem'].filter((p) => Capacitor.isPluginAvailable(p)),
+  battery: Capacitor.isPluginAvailable('HfptSystem') ? await Capacitor.Plugins.HfptSystem.batteryStatus() : null,
   koreanTTS: await window.__hfpt?.workout.voice.koreanAvailable(),
   webview: (navigator.userAgent.match(/Chrome\\/([\\d.]+)/) || [])[1], home: document.getElementById('btn-start-auto')?.innerText,
 }))()`);

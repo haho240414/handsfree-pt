@@ -71,7 +71,8 @@ function runClip(fx, spec, opts) {
   return tr.sets;
 }
 
-const clips = Object.entries(truth).filter(([k, t]) => !k.startsWith('_') && t.reps != null && (!only || only.includes(k)));
+// mode fixed(운동을 골랐을 때만 되는 가까운 화면 영상)는 자동 인식 비교에서 빼고 단위 테스트(recognition-fixtures)에서 따로 본다
+const clips = Object.entries(truth).filter(([k, t]) => !k.startsWith('_') && t.reps != null && t.mode !== 'fixed' && (!only || only.includes(k)));
 const fixtures = Object.fromEntries(clips.map(([k]) => [k, JSON.parse(fs.readFileSync(path.join(ROOT, 'test/fixtures', `${k}.full.json`), 'utf8'))]));
 
 export function evaluateAll() {

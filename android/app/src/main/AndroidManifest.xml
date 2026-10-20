@@ -63,6 +63,8 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.front" android:required="false" />
     <!-- 운동이 끝나면 헬스 커넥트에 운동 세션·칼로리를 쓴다 (설정에서 켰을 때만, 읽기는 안 함) -->
+    <!-- 하루 목표 알림이 절전 때문에 늦거나 안 오지 않게 '제한 없음' 요청 창을 열 수 있게 (사용자가 직접 허용) -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
     <uses-permission android:name="android.permission.health.WRITE_TOTAL_CALORIES_BURNED" />
     <queries>

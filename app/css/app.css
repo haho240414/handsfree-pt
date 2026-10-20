@@ -554,3 +554,9 @@ dialog h3 { margin: 0 0 10px; }
 .place-table tr.worst td { color: var(--text-2); font-weight: 400; }
 .place-help .feedback li { margin: 4px 0; }
 .place-link { display: block; margin: 8px auto 4px; font-size: 14px; font-weight: 500; color: var(--text-2); text-align: center; }
+.goal-week { display: grid; grid-template-columns: minmax(64px, 30%) 1fr auto; align-items: center; gap: 10px; }
+.goal-dots { display: inline-flex; gap: 6px; }
+.goal-dots i { width: 12px; height: 12px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--line); }
+.goal-dots i.on { background: var(--accent-text); border-color: var(--accent-text); }
+.goal-battery-warn { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface-2); border-radius: 12px; padding: 10px 12px; margin: 4px 0 8px; }
+.goal-battery-warn .muted { margin-top: 2px; }

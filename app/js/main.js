@@ -10,10 +10,11 @@ import { esc, exName, DAYS, fmtDate, fmtTime, minutes, setValue, sessionTotals, 
 import { isNative, NativeApp, NativeTTS, NativeHealth, NativeCameraInfo, canShareFile, shareTextFile, shareBinaryFile } from './native.js';
 import { toHealthRecord, healthEligible } from './health.js';
 import { corrections } from './diag.js';
-import { GOAL_DEFAULT, hasGoal, progress, streak, remainingRoutine, goalText, leftText } from './goal.js';
-import { canRemind, notifyPermission, syncReminders, testReminder, onReminderTap } from './reminders.js';
+import { GOAL_DEFAULT, hasGoal, progress, streak, remainingRoutine, goalText, leftText, weekProgress } from './goal.js';
+import { canRemind, notifyPermission, syncReminders, testReminder, onReminderTap, batteryState, openBatterySettings } from './reminders.js';
 import { summarize as tempoSummary, speeds as tempoSpeeds } from './engine/tempo.js';
-import { cameraOptions, placementTable, TYPICAL_FOV } from './camera.js';
+import { cameraOptions } from './camera.js';
+import { showPlacementHelp } from './placement.js';
 import { loadDemos, playDemo, hasDemo } from './demo.js';
 import { generateRoutine, routineMinutes, defaultItem, isHold, isTimer, isTimed, timerItem, TIMER_NAME, PLAN_META, FOCUS, EQUIPMENT, LEVELS } from './routine.js';
 
@@ -84,6 +85,7 @@ document.addEventListener('click', (e) => {
 /* ---------- 하루 목표 ---------- */
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
 const goalStep = (id) => (isHold(id) ? 10 : 5);
+const DEF_TIME = { remind: '20:00', lastCall: '22:00', morning: '08:00' };
 
 function goalCardHtml() {
   const g = store.goal();
@@ -117,9 +119,14 @@ function goalCardHtml() {
     ? `<div class="goal-bump">🔥 ${st}일 연속 달성! 목표를 10% 올려 볼까요?
         <span class="btn-row"><button class="btn btn-secondary" id="btn-goal-bump" type="button">올리기</button>
         <button class="btn btn-ghost" id="btn-goal-nobump" type="button">지금이 좋아요</button></span></div>` : '';
+  // 주간 목표: 월~일 채운 날을 점으로
+  const wk = g.weekly > 0 ? weekProgress(g, store.sessions(), now) : null;
+  const week = wk ? `<div class="goal-week"><span class="muted small">이번 주</span>
+    <span class="goal-dots">${wk.days.map((ok, i) => `<i class="${ok ? 'on' : ''}" title="${'월화수목금토일'[i]}"></i>`).join('')}</span>
+    <span class="goal-val">${wk.done}/${wk.target}일${wk.done >= wk.target ? ' ✓' : ''}</span></div>` : '';
   return `<div class="card goal-card${p.met ? ' met' : ''}">
     <div class="goal-head"><b>${head}</b>${st ? `<span class="goal-streak">🔥 ${st}일 연속</span>` : ''}</div>
-    ${rows.join('')}${bump}
+    ${rows.join('')}${week}${bump}
     <div class="goal-actions">${go}<button class="btn btn-ghost" id="btn-goal-edit" type="button">바꾸기</button></div>
     <div class="muted small">${note}</div></div>`;
 }
@@ -146,8 +153,10 @@ function renderGoal() {
   const minSeg = `<div class="seg" data-goal-seg="minutes">${[[0, '안 씀'], [10, '10분'], [20, '20분'], [30, '30분'], [45, '45분'], [60, '1시간']]
     .map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${g.minutes === v}">${l}</button>`).join('')}</div>`;
   const days = DAY_NAMES.map((d, i) => `<button type="button" class="chip" data-goal-day="${i}" aria-pressed="${g.days.includes(i)}">${d}</button>`).join('');
+  const weeklySeg = `<div class="seg" data-goal-seg="weekly">${[[0, '안 씀'], [2, '주 2일'], [3, '3일'], [4, '4일'], [5, '5일'], [6, '6일'], [7, '매일']]
+    .map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${(g.weekly || 0) === v}">${l}</button>`).join('')}</div>`;
   const time = (k, label, desc) => row(label, desc, `<span class="time-ctl">
-      <input type="time" data-goal-time="${k}" value="${esc(g[k] || (k === 'remind' ? '20:00' : '22:00'))}" ${g[k] ? '' : 'disabled'}>
+      <input type="time" data-goal-time="${k}" value="${esc(g[k] || DEF_TIME[k])}" ${g[k] ? '' : 'disabled'}>
       <label class="switch"><input type="checkbox" data-goal-time-on="${k}" ${g[k] ? 'checked' : ''}><span></span></label></span>`);
   $('goal-body').innerHTML = `
     <div class="card">${row('하루 목표 쓰기', '끄면 홈 카드와 알림이 사라져요', `<label class="switch"><input type="checkbox" id="goal-on" ${g.on ? 'checked' : ''}><span></span></label>`)}</div>
@@ -160,11 +169,15 @@ function renderGoal() {
     <h2 class="section-title">목표가 있는 요일</h2>
     <div class="card"><div class="chips">${days}</div>
       <p class="muted small" style="margin:8px 0 0">빠진 요일은 쉬는 날: 알림이 없고 연속 기록도 안 끊겨요</p></div>
+    <h2 class="section-title">주간 목표 (선택)</h2>
+    <div class="card">${weeklySeg}<p class="muted small" style="margin:8px 0 0">매일 다 채우기 어려우면 일주일(월~일)에 며칠 채울지로. 남은 날이 모자라면 '오늘 꼭'이라고 알려 드려요</p></div>
     <h2 class="section-title">못 채웠을 때 알림</h2>
     <div class="card">
       ${time('remind', '첫 알림', '이 시각까지 목표를 못 채웠으면')}
-      ${time('lastCall', '마지막 알림', '그래도 아직이면 한 번 더')}
+      ${time('lastCall', '마지막 알림', '그래도 아직이면 한 번 더 (연속 기록이 걸려 있으면 알려 드려요)')}
+      ${time('morning', '아침 알림', '오늘 할 것을 미리 (이미 채웠으면 안 와요)')}
       <p class="muted small" id="goal-perm" style="margin:6px 0">${canRemind ? '알림 권한 확인 중…' : '알림은 안드로이드 앱에서만 와요. 웹에선 앱을 열면 홈에서 남은 양을 보여 드려요'}</p>
+      <div id="goal-battery"></div>
       ${canRemind ? '<button class="btn btn-secondary" id="btn-goal-test" type="button">알림 시험 (5초 뒤 한 번)</button>' : ''}
     </div>`;
   if (canRemind) {
@@ -174,6 +187,16 @@ function renderGoal() {
       el.textContent = st === 'granted' ? '알림이 허용돼 있어요. 몇 분 늦게 올 수 있어요(배터리 절약)'
         : st === 'denied' ? '알림이 꺼져 있어요 → 폰 설정 → 애플리케이션 → 핸즈프리PT → 알림을 켜 주세요'
           : '저장하면 알림을 보내도 될지 물어봐요';
+    });
+    // 절전 대상이면 알림이 늦거나(삼성 '잠자는 앱'이면) 아예 안 온다
+    batteryState().then((b) => {
+      const el = $('goal-battery');
+      if (!el || !b) return;
+      el.innerHTML = b.state === 'ok'
+        ? '<p class="muted small" style="margin:0 0 6px">배터리 사용: 제한 없음 ✓ (알림이 제때 와요)</p>'
+        : `<div class="goal-battery-warn"><div><b>배터리 절약 때문에 알림이 늦거나 안 올 수 있어요</b>
+          <div class="muted small">'제한 없음'으로 바꿔 주세요.${b.samsung ? ' 삼성은 설정 → 배터리 → 백그라운드 사용 제한에서 \'잠자는 앱\'에 핸즈프리PT가 없어야 해요' : ''}</div></div>
+          <button class="mini-btn" id="btn-goal-battery" type="button">제한 없음으로</button></div>`;
     });
   }
 }
@@ -198,12 +221,16 @@ $('goal-body').addEventListener('click', async (e) => {
     return;
   }
   const seg = e.target.closest('[data-goal-seg] button');
-  if (seg) { g.minutes = Number(seg.dataset.v); renderGoal(); return; }
+  if (seg) { g[seg.parentElement.dataset.goalSeg] = Number(seg.dataset.v); renderGoal(); return; }
   const day = e.target.closest('[data-goal-day]');
   if (day) {
     const n = Number(day.dataset.goalDay);
     g.days = g.days.includes(n) ? g.days.filter((x) => x !== n) : [...g.days, n].sort();
     renderGoal();
+    return;
+  }
+  if (e.target.closest('#btn-goal-battery')) {
+    if (!(await openBatterySettings())) toast('설정 → 애플리케이션 → 핸즈프리PT → 배터리에서 \'제한 없음\'으로 바꿔 주세요', 4000);
     return;
   }
   if (e.target.closest('#btn-goal-test')) {
@@ -230,7 +257,7 @@ $('goal-body').addEventListener('change', (e) => {
   const on = e.target.closest('[data-goal-time-on]');
   if (on) {
     const k = on.dataset.goalTimeOn;
-    g[k] = on.checked ? (document.querySelector(`[data-goal-time="${k}"]`)?.value || (k === 'remind' ? '20:00' : '22:00')) : '';
+    g[k] = on.checked ? (document.querySelector(`[data-goal-time="${k}"]`)?.value || DEF_TIME[k]) : '';
     renderGoal();
   }
 });
@@ -275,41 +302,7 @@ document.addEventListener('click', (e) => {
   }
 });
 
-/* ---------- 폰은 어디에 둘까요 (카메라 거리 안내) ---------- */
-// 카메라를 가까이 두려면 '어디에 두느냐'가 크다: 바닥에 똑바로 세우면 머리까지 담으려고 멀리 가야 한다.
-// 거리는 카메라 시야각으로 계산(camera.js placementDistance) — 안드로이드 앱이면 이 폰 렌즈 값, 아니면 보통 폰 값
-async function showPlacementHelp() {
-  let front = null, rear = null;
-  if (NativeCameraInfo) {
-    try {
-      const cams = (await NativeCameraInfo.listCameras()).cameras || [];
-      const widest = (side) => cams.filter((c) => c.facing === side && Number.isFinite(c.fovLong)).sort((a, b) => b.fovLong - a.fovLong)[0];
-      front = widest('front');
-      rear = widest('back');
-    } catch { /* 모르면 보통 폰 값 */ }
-  }
-  const fov = front ? Math.round(front.fovLong) : TYPICAL_FOV;
-  const rows = placementTable(fov);
-  const m = (v) => (v == null ? '–' : `${v}m`);
-  const rearFov = rear ? Math.round(rear.fovLong) : null;
-  const rearRows = rearFov && rearFov - fov > 15 ? placementTable(rearFov) : null;
-  const d = $('dialog');
-  d.onclose = null;
-  d.innerHTML = `<form method="dialog" class="place-help"><h3>폰은 어디에 둘까요?</h3>
-    <p class="muted small" style="margin-top:0">${front ? `이 폰 전면 카메라(시야 ${fov}°)` : `보통 폰 전면 카메라(시야 약 ${fov}°)`} 기준, 키 175cm 가 다 들어오는 가장 가까운 거리예요.</p>
-    <table class="place-table"><thead><tr><th>두는 곳</th><th>전신</th><th>무릎까지<span>스쿼트·런지</span></th><th>상체만<span>컬·레이즈</span></th></tr></thead>
-    <tbody>${rows.map((r) => `<tr class="${r.key === 'floor' ? 'worst' : ''}"><td><b>${r.name}</b><span>${r.sub}</span></td>
-      <td>${m(r.full)}</td><td>${m(r.knees)}</td><td>${m(r.upper)}</td></tr>`).join('')}</tbody></table>
-    <ul class="feedback">
-      <li><b>폰 높이는 보여야 할 부분의 가운데</b>일 때 가장 가까워요 — 전신은 허리, 상체 운동은 가슴 높이</li>
-      <li>바닥에 둘 땐 <b>뒤로 20° 정도 기울여</b> 위를 보게 하세요. 기울기는 앱이 센서로 자동 보정해요(발끝이 잘리지 않게만)</li>
-      <li>상체 운동(컬·레이즈·프레스 등)은 허리까지만 보이면 돼요. 누워서·엎드려 하는 운동은 폰을 가로로 눕혀 옆에서</li>
-      <li><b>스쿼트를 골라서 할 땐</b>(오늘의 루틴·하루 목표) 허리까지만 보여도 세요 — '상체만' 칸 거리. 무릎까지 보이면 자세 교정도 해요</li>
-      ${rearRows ? `<li><b>후면 초광각(시야 ${rearFov}°)</b>으로 바꾸면 탁자 위 ${m(rearRows[0].full)} · 바닥+20° ${m(rearRows[1].full)}. 화면은 반대쪽이지만 숫자는 소리로 세요(설정 → 카메라 찾기)</li>` : ''}
-    </ul>
-    <div class="btn-row"><button value="ok" class="btn btn-primary">알겠어요</button></div></form>`;
-  d.showModal();
-}
+/* ---------- 폰은 어디에 둘까요 (카메라 거리 안내: placement.js) ---------- */
 document.addEventListener('click', (e) => {
   if (e.target.closest('#btn-place-help')) showPlacementHelp();
 });
@@ -1153,6 +1146,7 @@ syncReminders();
 NativeApp?.addListener('appStateChange', ({ isActive }) => {
   if (!isActive) return;
   if (!$('screen-home').hidden) renderHome();
+  if (!$('screen-goal').hidden) renderGoal(); // 배터리 설정에서 돌아오면 상태를 새로
   syncReminders();
 });
 onReminderTap((extra) => {
@@ -1160,7 +1154,14 @@ onReminderTap((extra) => {
   if (!$('screen-workout').hidden) return;
   go('home');
   const p = progress(store.goal(), store.sessions());
-  if (!p.met && leftText(p)) toast(`남은 것: ${leftText(p)}`, 4000);
+  const items = remainingRoutine(p);
+  if (!p.met && items.length) {
+    // 알림에 적은 대로 '누르면 남은 만큼 바로': 카메라 준비 화면까지 열어 둔다(시작 버튼은 자리 잡고 직접)
+    toast(`남은 것: ${leftText(p)}`, 3000);
+    workout.start({ plan: { name: '오늘 목표', items } });
+    return;
+  }
+  if (p.met) toast('오늘 목표는 이미 채웠어요 👍');
   setTimeout(() => $('goal-card')?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 80);
 });
 
