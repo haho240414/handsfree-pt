@@ -219,7 +219,7 @@ report.healthOk = hc?.first?.ids?.length === 2 && hc?.again?.ids?.length === 2 &
 report.healthSameRecord = report.healthOk ? hc.first.ids[0] === hc.again.ids[0] : null;
 report.goalOk = goal?.sync?.ok === true && goal?.pending > 0 && report.goalNotificationPosted === true;
 report.cameraFovOk = Array.isArray(camFov?.nat) && camFov.nat.some((c) => c.fovLong > 0);
-report.voiceOk = voice?.plugin === true && voice?.korean === true && voice?.play?.played === true && focus?.held === true;
+report.voiceOk = voice?.plugin === true && voice?.korean === true && /^ko/i.test(voice?.voice || '') && voice?.play?.played === true && focus?.held === true;
 save();
 console.log(`필수 점검 ${required ? '통과' : '실패'} · 카메라 ${report.cameraOk ? '동작' : '확인 안 됨'} · 뒤로가기 ${report.backOk} · 기울기 센서 ${report.tiltOk ? `${cam.pitch?.toFixed?.(1) ?? '-'}°` : '값 없음'}`
   + ` · 헬스 커넥트 ${report.healthOk ? `쓰기·고치기·지우기 통과(같은 기록 ${report.healthSameRecord})` : JSON.stringify(hc)}`

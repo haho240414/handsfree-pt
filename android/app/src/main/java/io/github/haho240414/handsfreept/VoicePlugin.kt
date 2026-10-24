@@ -156,9 +156,10 @@ class VoicePlugin : Plugin() {
             rate = (call.getDouble("rate") ?: rate.toDouble()).toFloat().coerceIn(0.5f, 2f)
             duck = call.getBoolean("duck", true) ?: true
             if (voiceName == null) {
-                // 엔진 기본 목소리로 되돌리기
-                tts?.let { e -> try { e.defaultVoice?.let { e.setVoice(it) } } catch (_: Exception) { } }
-                synth?.let { e -> try { e.defaultVoice?.let { e.setVoice(it) } } catch (_: Exception) { } }
+                // '폰 기본' = 그 엔진의 한국어 기본 목소리. 엔진 전체 기본(defaultVoice)은 폰 언어를 따라서
+                // 영어 폰이면 en-US 목소리로 한국어를 읽는다(CI 에뮬레이터에서 실측)
+                tts?.setLanguage(Locale.KOREAN)
+                synth?.setLanguage(Locale.KOREAN)
             }
             tts?.let { applyVoice(it) }
             synth?.let { applyVoice(it) }
