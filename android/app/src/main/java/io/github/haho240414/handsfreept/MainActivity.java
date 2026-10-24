@@ -13,6 +13,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(CameraInfoPlugin.class);
         // 배터리 최적화(절전) 상태 — 하루 목표 알림이 늦거나 안 오는 것 막기
         registerPlugin(SystemPlugin.class);
+        // 운동 음성: 말할 때 음악 줄이기·숫자를 미리 만들어 바로 틀기·목소리/빠르기 고르기
+        registerPlugin(VoicePlugin.class);
         super.onCreate(savedInstanceState);
         // 폰을 세워두고 운동하는 앱이라 화면이 꺼지면 안 된다
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);

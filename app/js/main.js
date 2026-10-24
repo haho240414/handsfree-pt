@@ -14,6 +14,7 @@ import { GOAL_DEFAULT, hasGoal, progress, streak, remainingRoutine, goalText, le
 import { canRemind, notifyPermission, syncReminders, testReminder, onReminderTap, batteryState, openBatterySettings } from './reminders.js';
 import { summarize as tempoSummary, speeds as tempoSpeeds } from './engine/tempo.js';
 import { cameraOptions } from './camera.js';
+import { voiceLabel } from './voice.js';
 import { showPlacementHelp } from './placement.js';
 import { loadDemos, playDemo, hasDemo } from './demo.js';
 import { generateRoutine, routineMinutes, defaultItem, isHold, isTimer, isTimed, timerItem, TIMER_NAME, PLAN_META, FOCUS, EQUIPMENT, LEVELS } from './routine.js';
@@ -910,6 +911,25 @@ function sw(key) {
 const fmtRest = (sec) => (sec <= 0 ? '끔' : sec < 60 ? `${sec}초` : `${Math.floor(sec / 60)}분${sec % 60 ? ` ${sec % 60}초` : ''}`);
 let camList = null; // '카메라 찾기'로 찾은 목록 (이번 실행 동안만)
 
+/** 목소리·빠르기를 바꾸면 바로 한 번 들려준다 */
+async function voiceSample() {
+  const v = workout.voice;
+  v.enabled = true;
+  v.unlock();
+  await v.configure(store.settings());
+  v.count(12, '좋아요. 이렇게 셀게요');
+}
+/** 목소리 목록은 폰에 물어봐야 해서 화면을 그린 뒤 채운다 */
+async function fillVoices() {
+  const vs = await workout.voice.voices();
+  const sel = $('voice-name');
+  if (!sel) return;
+  const cur = store.settings().voiceName;
+  sel.innerHTML = `<option value="">폰 기본</option>${vs.map((v, i) =>
+    `<option value="${esc(v.name)}"${v.name === cur ? ' selected' : ''}>${esc(voiceLabel(v, i))}</option>`).join('')}`;
+  sel.closest('.setting').hidden = !vs.length;
+}
+
 function renderSettings() {
   const st = store.settings();
   const row = (l, d, ctl, stacked) => `<div class="setting${stacked ? ' stacked' : ''}"><div><div class="l">${l}</div>${d ? `<div class="d">${d}</div>` : ''}</div>${ctl.replace('type="checkbox"',`type="checkbox" aria-label="${esc(l)}"`)}</div>`;
@@ -930,6 +950,9 @@ function renderSettings() {
       ${row('음성 안내', '횟수·세트·휴식을 소리로 알려줘요', sw('voice'))}
       ${row('소리 확인', '운동 전에 한 번 들어보세요', '<button class="mini-btn" id="btn-voice-test" type="button">들어보기</button>')}
       ${row('숫자 읽기', '', seg('countStyle', [['native', '하나 둘 셋'], ['number', '일 이 삼']]))}
+      ${row('말 빠르기', '', seg('voiceRate', [['slow', '느리게'], ['normal', '보통'], ['fast', '빠르게']]))}
+      ${row('목소리', '폰에 깔린 한국어 목소리 중에서', '<select id="voice-name" class="voice-select" aria-label="목소리"><option value="">폰 기본</option></select>')}
+      ${isNative ? row('음악 소리 줄이기', '말할 때만 잠깐 — 음악을 틀어 두고 운동할 때', sw('voiceDuck')) : ''}
       ${row('자세 교정 음성', '같은 문제가 반복될 때만 짧게 말해요', sw('cues'))}
     </div>
     <h2 class="section-title">하루 목표·알림</h2>
@@ -992,6 +1015,7 @@ function renderSettings() {
       ${store.storageOk() ? '' : '<p class="small" style="color:var(--danger);margin:0">⚠ 이 브라우저에선 저장이 막혀 있어요(사생활 보호 모드?). 앱을 닫으면 기록이 사라져요.</p>'}
     </div>
     <p class="muted small" style="text-align:center;margin-top:20px">핸즈프리 PT · 포즈 인식 MediaPipe · 영상은 폰 밖으로 나가지 않아요</p>`;
+  fillVoices();
 }
 $('settings-body').addEventListener('click', async (e) => {
   if (e.target.closest('#btn-goal-settings')) { openGoal(); return; }
@@ -1008,6 +1032,7 @@ $('settings-body').addEventListener('click', async (e) => {
     store.setSetting(key, v);
     if (key === 'theme') applyTheme();
     renderSettings();
+    if (key === 'voiceRate' || key === 'countStyle') voiceSample();
     return;
   }
   if (e.target.closest('#btn-export')) {
@@ -1027,8 +1052,8 @@ $('settings-body').addEventListener('click', async (e) => {
   if (e.target.closest('#btn-voice-test')) {
     const v = workout.voice;
     v.enabled = true;
-    v.style = store.settings().countStyle;
     v.unlock();
+    await v.configure(store.settings());
     v.say('하나, 둘, 셋. 소리가 잘 들리나요?', { interrupt: true });
     if (isNative && !(await v.koreanAvailable())) {
       toast('폰에 한국어 음성이 없어요. 음성 데이터 설치 화면을 엽니다', 4000);
@@ -1094,6 +1119,8 @@ $('settings-body').addEventListener('change', async (e) => {
     return;
   }
   if (s) store.setSetting(s.dataset.sw, s.checked);
+  if (s?.dataset.sw === 'voiceDuck') workout.voice.configure(store.settings());
+  if (e.target.id === 'voice-name') { store.setSetting('voiceName', e.target.value); voiceSample(); }
   const num = e.target.closest('[data-num]');
   if (num) {
     const v = Number(num.value);
@@ -1143,6 +1170,8 @@ try {
 
 // 하루 목표 알림: 시작할 때·앱으로 돌아올 때 다시 계산(날짜가 바뀌었거나 다른 곳에서 운동했을 수 있다)
 syncReminders();
+// 음성: 고른 목소리·빠르기 반영, 안드로이드 앱은 숫자 소리를 미리 만들어 둔다(처음 한 번 몇 초, 다음부턴 저장한 걸 불러옴)
+workout.voice.configure(store.settings());
 NativeApp?.addListener('appStateChange', ({ isActive }) => {
   if (!isActive) return;
   if (!$('screen-home').hidden) renderHome();

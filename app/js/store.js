@@ -5,6 +5,9 @@ const KEY = 'hfpt.v1';
 export const DEFAULT_SETTINGS = {
   voice: true,          // 음성 안내
   countStyle: 'native', // native(하나 둘 셋) | number(일 이 삼)
+  voiceName: '',        // 목소리(폰에 깔린 한국어 목소리 이름), '' = 폰 기본
+  voiceRate: 'normal',  // 말 빠르기: slow | normal | fast
+  voiceDuck: true,      // 말할 때 음악 소리 잠깐 줄이기 (안드로이드 앱)
   cues: true,           // 자세 교정 음성
   rest: 60,             // 휴식 타이머(초), 0 = 끔
   restAlerts: [10],     // 휴식 끝 몇 초 전에 알려줄지 (30·10·5, 3 = '셋 둘 하나')

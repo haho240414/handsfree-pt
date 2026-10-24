@@ -51,11 +51,33 @@ const stage = async (name, expression, ms) => {
 
 const app = await stage('앱', `(async () => ({
   url: location.href, native: window.__hfpt?.isNative, platform: Capacitor.getPlatform(),
-  plugins: ['TextToSpeech','App','Share','Filesystem','HealthConnect','LocalNotifications','CameraInfo','HfptSystem'].filter((p) => Capacitor.isPluginAvailable(p)),
+  plugins: ['TextToSpeech','App','Share','Filesystem','HealthConnect','LocalNotifications','CameraInfo','HfptSystem','HfptVoice'].filter((p) => Capacitor.isPluginAvailable(p)),
   battery: Capacitor.isPluginAvailable('HfptSystem') ? await Capacitor.Plugins.HfptSystem.batteryStatus() : null,
   koreanTTS: await window.__hfpt?.workout.voice.koreanAvailable(),
   webview: (navigator.userAgent.match(/Chrome\\/([\\d.]+)/) || [])[1], home: document.getElementById('btn-start-auto')?.innerText,
 }))()`);
+
+// 참고 단계: 운동 음성 — 앱이 켜질 때 숫자 소리를 미리 만들었는지, 바로 트는지, 말하는 동안 오디오 포커스(음악 줄이기)를 잡는지
+const voice = await stage('음성', `(async () => {
+  const V = Capacitor.Plugins.HfptVoice;
+  if (!Capacitor.isPluginAvailable('HfptVoice')) return { plugin: false };
+  const appPrep = await Promise.race([window.__hfpt.workout.voice.preparing, new Promise((r) => setTimeout(() => r('40초 넘음'), 40000))]);
+  const st = await V.status();
+  const t0 = performance.now();
+  const play = await V.play({ text: '둘', flush: true, then: '좋아요' });
+  const playMs = Math.round(performance.now() - t0);
+  await new Promise((r) => setTimeout(r, 1500));
+  await V.speak({ text: '음성 점검 중이에요. 음악을 틀어 두면 이때 잠깐 작아져요. 하나, 둘, 셋, 넷, 다섯.', flush: false });
+  return { plugin: true, engine: st.engine, korean: st.korean, voices: st.voices.length, voice: st.voice, clips: st.clips, appPrep, play, playMs };
+})()`, 70000);
+let focus = null;
+try {
+  const d = execFileSync('adb', ['shell', 'dumpsys', 'audio'], { timeout: 30000 }).toString();
+  const stack = d.split('Audio Focus stack entries')[1]?.split('\n').slice(0, 8).join('\n') ?? '';
+  focus = { held: stack.includes('io.github.haho240414.handsfreept'), duck: /GAIN_TRANSIENT_MAY_DUCK/.test(stack), stack: stack.slice(0, 600) };
+} catch (e) { focus = String(e.message).slice(0, 120); }
+report.voiceFocus = focus;
+console.log('[음성 중 오디오 포커스]', JSON.stringify(focus));
 
 const engine = await stage('엔진', `(async () => {
   const { computeFeatures } = await import('./js/engine/features.js');
@@ -197,10 +219,12 @@ report.healthOk = hc?.first?.ids?.length === 2 && hc?.again?.ids?.length === 2 &
 report.healthSameRecord = report.healthOk ? hc.first.ids[0] === hc.again.ids[0] : null;
 report.goalOk = goal?.sync?.ok === true && goal?.pending > 0 && report.goalNotificationPosted === true;
 report.cameraFovOk = Array.isArray(camFov?.nat) && camFov.nat.some((c) => c.fovLong > 0);
+report.voiceOk = voice?.plugin === true && voice?.korean === true && voice?.play?.played === true && focus?.held === true;
 save();
 console.log(`필수 점검 ${required ? '통과' : '실패'} · 카메라 ${report.cameraOk ? '동작' : '확인 안 됨'} · 뒤로가기 ${report.backOk} · 기울기 센서 ${report.tiltOk ? `${cam.pitch?.toFixed?.(1) ?? '-'}°` : '값 없음'}`
   + ` · 헬스 커넥트 ${report.healthOk ? `쓰기·고치기·지우기 통과(같은 기록 ${report.healthSameRecord})` : JSON.stringify(hc)}`
   + ` · 목표 알림 ${report.goalOk ? `통과(${goal.pending}개 걸림, 시험 알림 뜸)` : JSON.stringify(goal)}`
+  + ` · 음성 ${report.voiceOk ? `통과(미리 만든 소리 ${voice.clips}개, 트는 데 ${voice.playMs}ms, 말하는 동안 음악 줄이기)` : JSON.stringify({ voice, focus: report.voiceFocus })}`
   + ` · 카메라 시야각 ${report.cameraFovOk ? camFov.nat.map((c) => `${c.facing} ${Math.round(c.fovLong)}°`).join(', ') : JSON.stringify(camFov)}`);
 try { ws.close(); } catch { /* 무시 */ }
 process.exit(required ? 0 : 1);

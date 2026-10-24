@@ -112,7 +112,7 @@ export class Workout {
   async start({ candidates = null, source = null, plan = null } = {}) {
     const st = store.settings();
     this.voice.enabled = st.voice;
-    this.voice.style = st.countStyle;
+    this.voice.configure(st); // 읽기 방식·빠르기·목소리 (안드로이드 앱은 숫자 소리를 미리 만들어 둠)
     this.voice.unlock(); // 시작 버튼 탭 안에서 소리 잠금 해제
     if (!source) this.tilt.start(); // 폰 기울기 센서 (iOS 는 이 탭 안에서 권한을 물어야 함)
     this.el.voiceBtn.innerHTML = icon(this.voice.enabled ? 'speaker-high' : 'speaker-slash');

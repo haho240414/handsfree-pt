@@ -560,3 +560,4 @@ dialog h3 { margin: 0 0 10px; }
 .goal-dots i.on { background: var(--accent-text); border-color: var(--accent-text); }
 .goal-battery-warn { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface-2); border-radius: 12px; padding: 10px 12px; margin: 4px 0 8px; }
 .goal-battery-warn .muted { margin-top: 2px; }
+.voice-select { max-width: 62%; }
