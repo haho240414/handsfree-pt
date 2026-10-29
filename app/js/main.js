@@ -1252,7 +1252,7 @@ try {
 // 하루 목표 알림: 시작할 때·앱으로 돌아올 때 다시 계산(날짜가 바뀌었거나 다른 곳에서 운동했을 수 있다)
 syncReminders();
 // 음성: 고른 목소리·빠르기 반영, 안드로이드 앱은 숫자 소리를 미리 만들어 둔다(처음 한 번 몇 초, 다음부턴 저장한 걸 불러옴)
-workout.voice.configure(store.settings());
+workout.voice.configure(store.settings(), { delay: 8000 });
 NativeApp?.addListener('appStateChange', ({ isActive }) => {
   if (!isActive) return;
   if (!$('screen-home').hidden) renderHome();

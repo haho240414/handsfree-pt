@@ -239,20 +239,28 @@ class VoicePlugin : Plugin() {
             var ended = false
             val end = { if (!ended) { ended = true; main.postDelayed({ finish() }, 300) } }
             main.postDelayed({ end() }, 30000)
-            for (text in todo) {
-                val k = key(text)
-                val f = File(dir, "$k.wav")
-                val step = { ok: Boolean ->
-                    if (ok && f.length() > 44) load(k, f)
+            // 하나씩 차례로 만든다: 한꺼번에 맡기면 TTS 엔진이 그동안 CPU 를 다 써서 앱 시작이 느려진다(CI 에뮬레이터 실측 68초).
+            // 큐·콜백은 모두 메인 스레드에서
+            val queue = ArrayDeque(todo)
+            fun next() {
+                while (queue.isNotEmpty()) {
+                    val text = queue.removeFirst()
+                    val k = key(text)
+                    val f = File(dir, "$k.wav")
+                    if (f.length() > 44) { load(k, f); left--; continue }
+                    val id = "mk${++seq}"
+                    synthDone[id] = { ok ->
+                        if (ok && f.length() > 44) { made++; load(k, f) }
+                        left--
+                        if (left <= 0) end() else main.post { next() }
+                    }
+                    if (e.synthesizeToFile(text, Bundle(), f, id) == TextToSpeech.SUCCESS) return
+                    synthDone.remove(id)
                     left--
-                    if (left <= 0) end()
                 }
-                if (f.length() > 44) { step(true); continue }
-                val id = "mk${++seq}"
-                synthDone[id] = { ok -> made += if (ok) 1 else 0; step(ok) }
-                val r = e.synthesizeToFile(text, Bundle(), f, id)
-                if (r != TextToSpeech.SUCCESS) { synthDone.remove(id); step(false) }
+                if (left <= 0) end()
             }
+            main.post { next() }
         }
     }
 

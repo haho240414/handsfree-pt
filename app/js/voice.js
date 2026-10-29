@@ -70,7 +70,8 @@ export class Voice {
    * 설정을 반영한다: { voiceName, voiceRate, voiceDuck, countStyle }.
    * 안드로이드 앱은 그 목소리·빠르기로 숫자·자주 하는 말을 미리 만들어 둔다(한 번 만들면 다음 실행부터 바로 불러옴).
    */
-  async configure(st = {}) {
+  /** @param {{delay?:number}} [o] delay = 미리 만들기를 이만큼(ms) 뒤에 시작 — 앱을 켜자마자 TTS 엔진이 CPU 를 쓰면 시작이 느려진다 */
+  async configure(st = {}, { delay = 0 } = {}) {
     // 미리 만들기는 몇 초 걸려서 기다리지 않는다(끝나면 this.preparing 이 결과로 풀림). 만들어진 것부터 바로 쓴다
     this.style = st.countStyle || 'native';
     this.rate = rateOf(st.voiceRate);
@@ -81,9 +82,16 @@ export class Voice {
       await this.nv.configure({ voice: this.voiceName, rate: this.rate, duck: st.voiceDuck !== false });
       const key = `${this.voiceName}|${this.rate}|${this.style}`;
       if (this.prepared === key) return null;
-      this.prepared = key;
-      this.preparing = this.nv.prepare({ texts: clipTexts(this.style) })
-        .catch((e) => { this.prepared = null; return { error: String(e?.message || e) }; });
+      clearTimeout(this._prepTimer);
+      const run = () => {
+        this.prepared = key;
+        this.preparing = this.nv.prepare({ texts: clipTexts(this.style) })
+          .catch((e) => { this.prepared = null; return { error: String(e?.message || e) }; });
+        return this.preparing;
+      };
+      // 기다리는 동안 운동을 시작하면(delay 없이 다시 부름) 바로 만든다
+      if (delay > 0) this.preparing = new Promise((r) => { this._prepTimer = setTimeout(() => r(run()), delay); });
+      else run();
       return null;
     } catch (e) {
       this.prepared = null;

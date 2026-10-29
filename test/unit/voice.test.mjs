@@ -67,6 +67,17 @@ test('음성: 설정 반영 — 빠르기·목소리를 넘기고, 같은 설정
   assert.equal(nv.calls.filter((c) => c[0] === 'prepare').length, 2);
 });
 
+test('음성: 앱을 켤 때는 미리 만들기를 늦추고, 그 전에 운동을 시작하면 바로 만든다', async () => {
+  const nv = fakeNative();
+  const v = new Voice({ native: nv, tts: null });
+  await v.configure({}, { delay: 60000 });
+  assert.equal(nv.calls.filter((c) => c[0] === 'prepare').length, 0, '아직 안 만듦');
+  await v.configure({});
+  assert.equal(nv.calls.filter((c) => c[0] === 'prepare').length, 1, '운동 시작 → 바로');
+  const r = await v.preparing;
+  assert.equal(r.ready, 107);
+});
+
 test('음성: 꺼져 있으면 아무 말도 안 한다', async () => {
   const nv = fakeNative(['하나']);
   const v = new Voice({ native: nv, tts: null });
