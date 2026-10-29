@@ -95,7 +95,8 @@ export function setRoutineDraft(r) {
   state.routineDraft = r;
   persist();
 }
-export const routinePrefs = () => ({ focus: 'auto', equipment: 'body', minutes: 30, level: 1, warmup: true, ...(state.routinePrefs || {}) });
+// plan: basic(부위 큰 묶음) | split(분할: 날마다 정해진 부위) | pick(오늘 부위 직접), splitDay: 'auto'(가장 오래 쉰 날) | 몇째 날
+export const routinePrefs = () => ({ focus: 'auto', equipment: 'body', minutes: 30, level: 1, warmup: true, plan: 'basic', split: 'three', splitDay: 'auto', muscles: ['chest', 'triceps'], ...(state.routinePrefs || {}) });
 export function setRoutinePrefs(p) {
   state.routinePrefs = { ...routinePrefs(), ...p };
   persist();

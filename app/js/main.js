@@ -15,6 +15,7 @@ import { canRemind, notifyPermission, syncReminders, testReminder, onReminderTap
 import { summarize as tempoSummary, speeds as tempoSpeeds } from './engine/tempo.js';
 import { cameraOptions } from './camera.js';
 import { voiceLabel } from './voice.js';
+import { MUSCLES, MUSCLE_OF, SPLITS, dayName, nextSplitDay, generateSplitRoutine } from './split.js';
 import { showPlacementHelp } from './placement.js';
 import { loadDemos, playDemo, hasDemo } from './demo.js';
 import { generateRoutine, routineMinutes, defaultItem, isHold, isTimer, isTimed, timerItem, TIMER_NAME, PLAN_META, FOCUS, EQUIPMENT, LEVELS } from './routine.js';
@@ -401,10 +402,74 @@ const itemLine = (it) => {
 
 function makeRoutine(seedN = 0) {
   const p = store.routinePrefs();
-  const r = generateRoutine({
-    ...p, sessions: store.sessions(), seed: `${todayKey()}#${seedN}`, weightOf: (id) => store.lastWeight(id),
-  });
+  const common = { equipment: p.equipment, minutes: p.minutes, level: p.level, warmup: p.warmup, sessions: store.sessions(),
+    seed: `${todayKey()}#${seedN}`, weightOf: (id) => store.lastWeight(id) };
+  let r;
+  if (p.plan === 'split' || p.plan === 'pick') {
+    // 부위별: 분할이면 오늘 할 날(자동 = 가장 오래 쉰 날), 직접이면 고른 부위. 내 운동(즐겨찾기) 안에서 짠다
+    let muscles, title = '', why = '';
+    if (p.plan === 'split') {
+      const sp = SPLITS[p.split] || SPLITS.three;
+      const auto = nextSplitDay(p.split, store.sessions());
+      const i = p.splitDay === 'auto' ? auto.index : Math.min(Number(p.splitDay) || 0, sp.days.length - 1);
+      muscles = sp.days[i];
+      title = sp.days.length > 1 ? `${sp.name} ${i + 1}일차 ${dayName(muscles)}` : `${sp.name} ${dayName(muscles)}`;
+      if (p.splitDay === 'auto') why = auto.reason;
+    } else {
+      muscles = Object.keys(MUSCLES).filter((m) => (p.muscles || []).includes(m));
+      if (!muscles.length) muscles = ['chest', 'triceps'];
+    }
+    r = generateSplitRoutine({ ...common, muscles, mine: store.favoriteExercises(), title });
+    r.reason = [why, r.reason].filter(Boolean).join(' · ');
+  } else {
+    r = generateRoutine({ ...p, ...common });
+  }
   store.setRoutineDraft({ ...r, seedN, madeAt: Date.now() });
+}
+
+/** 내 운동(자주 하는 운동) 고르기: 부위별로 눌러서 켜고 끈다. 즐겨찾기와 같은 목록 */
+function editMyExercises() {
+  const d = $('dialog');
+  const draw = () => {
+    const fav = store.favoriteExercises();
+    d.innerHTML = `<form method="dialog" class="my-ex"><h3>내 운동</h3>
+      <p class="muted small" style="margin-top:0">자주 하는 운동을 골라 두면 부위별 루틴을 이 안에서 짜요. 고른 운동이 없는 부위만 추천으로 채워요.</p>
+      ${Object.entries(MUSCLES).map(([m, label]) => {
+        const ids = EXERCISES.filter((e) => MUSCLE_OF[e.id] === m).map((e) => e.id);
+        const on = ids.filter((id) => fav.includes(id)).length;
+        return `<div class="my-ex-group"><b>${label}${on ? ` <span class="muted small">${on}</span>` : ''}</b><div class="chips">${ids.map((id) =>
+          `<button type="button" class="chip" data-my-ex="${id}" aria-pressed="${fav.includes(id)}">${esc(exName(id))}</button>`).join('')}</div></div>`;
+      }).join('')}
+      <div class="btn-row"><button value="ok" class="btn btn-primary">완료 (${fav.length}가지)</button></div></form>`;
+  };
+  draw();
+  d.onclick = (e) => {
+    const b = e.target.closest('[data-my-ex]');
+    if (!b) return;
+    const y = d.querySelector('form').scrollTop;
+    store.toggleFavoriteExercise(b.dataset.myEx);
+    draw();
+    d.querySelector('form').scrollTop = y;
+  };
+  d.onclose = () => { d.onclick = null; makeRoutine(0); renderRoutine(); };
+  d.showModal();
+}
+
+/** 짜는 방식별 줄: 기본 = 부위 묶음, 분할 = 분할 종류·오늘 할 날, 부위 고르기 = 부위 여러 개. 부위별이면 '내 운동' 버튼 */
+function planRows(p, segR) {
+  const my = `<div class="rm-row"><span>내 운동</span><button class="mini-btn" id="btn-my-ex" type="button">${store.favoriteExercises().length ? `${store.favoriteExercises().length}가지 · 고치기` : '고르기'}</button></div>`;
+  if (p.plan === 'split') {
+    const sp = SPLITS[p.split] || SPLITS.three;
+    const auto = nextSplitDay(p.split, store.sessions());
+    const days = sp.days.length > 1 ? `<div class="rm-row"><span>오늘</span>${segR('splitDay', [['auto', `자동 · ${dayName(sp.days[auto.index])}`], ...sp.days.map((ms, i) => [i, `${i + 1}일차 ${dayName(ms)}`])], p.splitDay)}</div>` : '';
+    return `<div class="rm-row"><span>분할</span>${segR('split', Object.entries(SPLITS).map(([k, v]) => [k, v.name]), p.split)}</div>${days}${my}`;
+  }
+  if (p.plan === 'pick') {
+    const on = p.muscles || [];
+    return `<div class="rm-row"><span>부위</span><div class="chips">${Object.entries(MUSCLES).map(([m, l]) =>
+      `<button type="button" class="chip" data-r-muscle="${m}" aria-pressed="${on.includes(m)}">${l}</button>`).join('')}</div></div>${my}`;
+  }
+  return `<div class="rm-row"><span>부위</span>${segR('focus', FOCUS_OPTS, p.focus)}</div>`;
 }
 
 let routineCustomizeOpen = false;
@@ -418,12 +483,15 @@ function renderRoutine() {
   const exerciseCount = items.filter((it) => !isTimer(it)).length;
   const sets = items.filter((it) => !isTimer(it)).reduce((n,it) => n + it.sets,0);
   const prescription = (it) => isTimer(it) ? fmtSec(it.sec) : `${isTimed(it) ? it.workSec + '초' : isHold(it.exercise) ? it.holdSec + '초' : it.reps + '회'} × ${it.sets}세트`;
-  $('routine-body').innerHTML = `<div class="routine-intro"><p class="muted">${fmtDate(Date.now())}</p><h1>오늘의 루틴</h1><p class="muted">${esc(d?.name || '내 루틴')}</p><p class="routine-facts">${routineMinutes(items)}분 <span>·</span> ${exerciseCount}가지 운동 <span>·</span> ${sets}세트</p></div>
+  const byMuscle = p.plan === 'split' || p.plan === 'pick';
+  const favN = store.favoriteExercises().length;
+  $('routine-body').innerHTML = `<div class="routine-intro"><p class="muted">${fmtDate(Date.now())}</p><h1>오늘의 루틴</h1><p class="muted">${esc(d?.name || '내 루틴')}</p><p class="routine-facts">${routineMinutes(items)}분 <span>·</span> ${exerciseCount}가지 운동 <span>·</span> ${sets}세트</p>${d?.counts ? `<p class="muted small routine-counts">${esc(d.counts)}</p>` : ''}</div>
     <div class="routine-list ${routineExpanded?'expanded':''}">${items.map((it,i) => `<button class="r-item" type="button" data-r-edit="${i}" aria-label="${esc(isTimer(it)?it.name:exName(it.exercise))} 수정"><span class="r-no">${String(i+1).padStart(2,'0')}</span><span class="r-name">${esc(isTimer(it)?it.name:exName(it.exercise))}</span><span class="r-prescription">${prescription(it)}</span></button>`).join('')}</div>
     ${items.length>3?`<button class="text-btn routine-expand" id="btn-routine-expand" aria-expanded="${routineExpanded}">${routineExpanded?'접기':`이어서 ${items.length-3}가지 운동`} ${icon('caret-right')}</button>`:''}
     <details id="routine-customize" ${routineCustomizeOpen ? 'open' : ''}><summary>루틴 수정 ${icon('caret-right')}</summary><div class="routine-make">${d?.reason?`<p class="muted small">${esc(d.reason)}</p>`:''}
-      <div class="rm-row"><span>부위</span>${segR('focus',FOCUS_OPTS,p.focus)}</div>
-      <div class="rm-row"><span>장소</span>${segR('equipment',Object.entries(EQUIPMENT),p.equipment)}</div>
+      <div class="rm-row"><span>짜는 방식</span>${segR('plan',[['basic','기본'],['split','분할'],['pick','부위 고르기']],p.plan||'basic')}</div>
+      ${planRows(p, segR)}
+      <div class="rm-row"><span>${byMuscle && favN ? '장소 (내 운동이 없는 부위만)' : '장소'}</span>${segR('equipment',Object.entries(EQUIPMENT),p.equipment)}</div>
       <div class="rm-row"><span>시간</span>${segR('minutes',MIN_OPTS.map(m=>[m,`${m}분`]),p.minutes)}</div>
       <div class="rm-row"><span>강도</span>${segR('level',LEVELS.map((l,i)=>[i,l]),p.level)}</div>
       <div class="rm-row"><span>준비운동·마무리</span>${segR('warmup',[['1','넣기'],['0','빼기']],p.warmup === false ? '0':'1')}</div>
@@ -444,11 +512,24 @@ $('routine-body').addEventListener('click', async (e) => {
   if (seg) {
     const key = seg.parentElement.dataset.rseg;
     const raw = seg.dataset.v;
-    store.setRoutinePrefs({ [key]: key === 'warmup' ? raw === '1' : /^\d+$/.test(raw) ? Number(raw) : raw });
+    // 분할을 바꾸면 오늘 할 날은 다시 자동으로
+    store.setRoutinePrefs({ [key]: key === 'warmup' ? raw === '1' : /^\d+$/.test(raw) ? Number(raw) : raw, ...(key === 'split' ? { splitDay: 'auto' } : {}) });
     makeRoutine(0); // 조건을 바꾸면 바로 다시 짠다
     renderRoutine();
     return;
   }
+  const mu = e.target.closest('[data-r-muscle]');
+  if (mu) {
+    const cur = store.routinePrefs().muscles || [];
+    const m = mu.dataset.rMuscle;
+    const next = cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m];
+    if (!next.length) { toast('부위를 하나 이상 골라 주세요'); return; }
+    store.setRoutinePrefs({ muscles: next });
+    makeRoutine(0);
+    renderRoutine();
+    return;
+  }
+  if (e.target.closest('#btn-my-ex')) { editMyExercises(); return; }
   const d = store.routineDraft();
   if (e.target.closest('#btn-make-routine')) { makeRoutine(0); renderRoutine(); return; }
   if (e.target.closest('#btn-shuffle-routine')) { makeRoutine((d?.seedN || 0) + 1); renderRoutine(); return; }

@@ -561,3 +561,9 @@ dialog h3 { margin: 0 0 10px; }
 .goal-battery-warn { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface-2); border-radius: 12px; padding: 10px 12px; margin: 4px 0 8px; }
 .goal-battery-warn .muted { margin-top: 2px; }
 .voice-select { max-width: 62%; }
+/* 내 운동 고르기 창·부위 고르기 */
+.my-ex { max-height: 78vh; overflow-y: auto; }
+.my-ex-group { margin: 12px 0; }
+.my-ex-group .chips { margin: 6px 0 0; }
+.routine-make .rm-row .chips { margin: 0; }
+.routine-counts { margin: 4px 0 0; }
